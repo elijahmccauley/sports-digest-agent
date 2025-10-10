@@ -209,3 +209,8 @@ __marimo__/
 # FastAgent
 *.secrets.yaml
 fastagent.jsonl
+
+data/
+cache/
+server_logs/
+*.log
