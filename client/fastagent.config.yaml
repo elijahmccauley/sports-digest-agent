@@ -16,26 +16,25 @@ logger:
 
 # MCP Servers
 mcp:
-    servers:
-        fetch:
-            command: "uvx"
-            args: ["mcp-server-fetch"]
-        filesystem:
-            command: "npx"
-            args: ["-y", "@modelcontextprotocol/server-filesystem", "."]
-        brave:
-            command: npx
-            args: ["-y", "@modelcontextprotocol/server-brave-search"]
-        perplexity_mcp:
-            env:
-                PERPLEXITY_MODEL: "sonar"
-            command: "uvx"
-            args:
-                - "perplexity-mcp"
-
-        # Our custom newspaper creation server (HTTP transport)
-        sport_server:
-          transport: "http"
-          url: "http://localhost:8080/mcp"
-          read_transport_sse_timeout_seconds: 900
+  servers:
+    fetch:
+      command: "uvx"
+      args: ["mcp-server-fetch"]
+    filesystem:
+      command: "npx"
+      args: ["-y", "@modelcontextprotocol/server-filesystem", "."]
+    brave:
+      command: npx
+      args: ["-y", "@modelcontextprotocol/server-brave-search"]
+    perplexity_mcp:
+      env:
+        PERPLEXITY_MODEL: "sonar"
+      command: "uvx"
+      args:
+        - "perplexity-mcp"
+    # Our custom sports server (HTTP transport)
+    sport_mcp_server:
+      transport: "http"
+      url: "http://localhost:8080/mcp"
+      read_transport_sse_timeout_seconds: 900
         
