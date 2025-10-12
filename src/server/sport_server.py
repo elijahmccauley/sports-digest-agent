@@ -70,6 +70,7 @@ async def fetch_scores(sport: str = 'NBA', date: str = "yesterday") -> str:
         result_text = f"**{sport} - {date_label} ({len(events)} games):**\n\n"
         
         for event in events:
+            game_id = event.get('id', 'unknown')
             competitions = event.get('competitions', [{}])[0]
             competitors = competitions.get('competitors', [])
             status = event.get('status', {}).get('type', {})
@@ -84,7 +85,7 @@ async def fetch_scores(sport: str = 'NBA', date: str = "yesterday") -> str:
                 
                 if is_completed:
                     # Show final score
-                    result_text += f"• {away_team} {away_score}, {home_team} {home_score} - Final\n"
+                    result_text += f"• {away_team} {away_score}, {home_team} {home_score} - Final [ID: {game_id}]\n"
                 else:
                     # Show scheduled game
                     game_date = event.get('date', '')
@@ -94,12 +95,75 @@ async def fetch_scores(sport: str = 'NBA', date: str = "yesterday") -> str:
                     else:
                         time_str = "TBD"
                     
-                    result_text += f"• {away_team} @ {home_team} - {time_str} ({status_detail})\n"
+                    result_text += f"• {away_team} @ {home_team} - {time_str} [ID: {game_id}]\n"
+                    
+        result_text += "\n*Use game ID with get_game_details for more information*"
         
         return result_text
     
     except Exception as e:
         return f"Error fetching scores: {str(e)}"
+    
+    
+@mcp.tool()
+async def get_sports_news(sport: str = "NBA", limit: int = 10) -> str:
+    """
+    Get the latest news headlines for a specific sport.
+    
+    Args:
+        sport: The sport to fetch news for (NBA, WNBA, NFL, MLB, NHL, CFB, or 'all' for general sports)
+        limit: Number of news articles to return (default 10)
+    """
+    if sport.lower() != "all" and sport not in SPORT_ENDPOINTS:
+        return f"Sport '{sport}' is not supported. Choose from: {', '.join(SPORT_ENDPOINTS.keys())} or 'all'"
+    if sport.lower() == "all":
+        url = "https://now.core.api.espn.com/v1/sports/news"
+    else:
+        endpoint = SPORT_ENDPOINTS[sport]
+        url = f"https://site.api.espn.com/apis/site/v2/sports/{endpoint}/news"
+        
+    try:
+        response = requests.get(url, params={'limit': limit})
+        response.raise_for_status()
+        data = response.json()
+        
+        articles = data.get('articles', [])
+        
+        if not articles:
+            return f"No news articles found for {sport}."
+        
+        news_text = f"**{sport} News - latest headlines:**\n\n"
+        
+        for i, article in enumerate(articles[:limit], 1):
+            headline = article.get('headline', 'No headline')
+            description = article.get('description', '')
+            published = article.get('published', '')
+            link = article.get('links', {}).get('web', {}).get('href', '')
+            
+            if published:
+                pub_date = datetime.fromisoformat(published.replace('Z', '+00:00'))
+                time_ago = datetime.now(timezone.utc) - pub_date
+                if time_ago.days > 0:
+                    time_str = f"{time_ago.days}d ago"
+                elif time_ago.seconds // 3600 > 0:
+                    time_str = f"{time_ago.seconds // 3600}h ago"
+                else:
+                    time_str = f"{time_ago.seconds // 60}m ago"  
+            else:
+                time_str = "Recently"
+                
+            news_text += f"{i}. **{headline}**\n"
+            if description:
+                news_text += f"   {description}\n"
+            news_text += f"   {time_str}"
+            if link:
+                news_text += f" • [Read more]({link})"
+            news_text += "\n\n"
+            
+        return news_text
+    
+    except Exception as e:
+        return f"Error fetching {sport} news: {str(e)}"
     
     
 # ============= SERVER ENTRY POINT =============

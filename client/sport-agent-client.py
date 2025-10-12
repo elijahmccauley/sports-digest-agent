@@ -16,11 +16,13 @@ fast = FastAgent("Sport Digest Agent", config_path="./fastagent.config.yaml")
     You have access to:
     - **Sports Schedule Data**: Fetch today's games across NBA, WNBA, NFL, MLB, and NHL
     - **Score Information**: Get results from yesterday's games or any specific date
+    - **Sports News**: Get major sports news from specific sports or just sports overall
     - **User Preferences**: Manage which sports the user wants to follow
     
     Use these tools to:
     1. Provide up-to-date information on today's games
     2. Show scores and results from recent games
+    3. Keep users up to date with breaking news
     3. Help users stay informed about their favorite sports
     4. Create personalized daily sports digests
     
