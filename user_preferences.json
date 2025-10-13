@@ -1,0 +1,20 @@
+{
+  "sports": {
+    "NBA": true,
+    "WNBA": true,
+    "NFL": true,
+    "MLB": true,
+    "NHL": true,
+    "CFB": true
+  },
+  "favorite_teams": [
+    "Atlanta Falcons",
+    "Minnesota Timberwolves",
+    "Georgia Tech",
+    "New York Liberty"
+  ],
+  "email": "",
+  "digest_time": "06:00",
+  "include_news": true,
+  "news_limit": 15
+}

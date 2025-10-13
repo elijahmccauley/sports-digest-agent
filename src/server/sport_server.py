@@ -3,15 +3,19 @@
 import os
 import requests
 import json
-from fastmcp import FastMCP
+from fastmcp import FastMCP, Context
 from fastmcp.utilities.logging import get_logger
 from mcp.server import Server
 import mcp.types as types
 from datetime import datetime, timezone, timedelta
+#from fastmcp.prompts import UserMessage
+from pydantic import BaseModel
 
 # Initialize logger for server lifecycle events
 logger = get_logger(__name__)
 
+class Confirmation(BaseModel):
+    confirmed: bool
 
 # ============= MCP SERVER INITIALIZATION =============
 
@@ -60,7 +64,7 @@ def load_preferences():
         logger.error(f"Error loading preferences: {e}")
         return DEFAULT_PREFERENCES.copy()
     
-def save_preferences():
+def save_preferences(prefs):
     """Save preferences to JSON file"""
     try:
         with open(PREFERENCES_FILE, 'w') as f:
@@ -107,8 +111,10 @@ async def get_preferences() -> str:
     result += f"**Include News:** {'Yes' if prefs['include_news'] else 'No'}\n"
     result += f"**News Articles per Sport:** {prefs['news_limit']}\n"
     
+    return result
+    
 @mcp.tool()
-async def toggle_sport(sport: str, enabled: bool) -> str:
+async def toggle_sport(sport: str, enabled: bool, ctx: Context = None) -> str:
     """
     Enable or disable a sport in your daily digest
     
@@ -149,7 +155,7 @@ async def set_favorite_teams(teams: list) -> str:
         return "Error saving preferences"
     
 @mcp.tool()
-async def add_favorite_team(team: str) -> str:
+async def add_favorite_team(team: str, ctx: Context = None) -> str:
     """
     Add a team to your favorites
     
@@ -169,7 +175,7 @@ async def add_favorite_team(team: str) -> str:
         return "Error saving preferences"
     
 @mcp.tool()
-async def remove_favorite_team(team: str) -> str:
+async def remove_favorite_team(team: str, ctx: Context = None) -> str:
     """
     Remove a team from your favorites
     
@@ -243,12 +249,20 @@ async def set_digest_settings(
         return "Error saving preferences"
     
 @mcp.tool()
-async def reset_preferences() -> str:
+async def reset_preferences(ctx: Context = None) -> str:
     """Reset all preferences to default values"""
+    result = await ctx.elicit(
+        message="⚠️ **This will reset ALL your preferences to defaults.**\n\nThis includes:\n- Sport selections\n- Favorite teams\n- Email\n- Digest settings\n\nAre you sure?",
+        response_type=Confirmation,
+    )
+    
+    if result.action != "accept" or not result.data.confirmed:
+        return "❌ **Reset cancelled** - Your preferences are unchanged"
+    
     if save_preferences(DEFAULT_PREFERENCES):
-        return "✓ Preferences reset to defaults"
+        return "✅ **All preferences have been reset to defaults**"
     else:
-        return "Error resetting preferences"
+        return "❌ Error resetting preferences"
 
     
     
