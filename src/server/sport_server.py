@@ -69,6 +69,186 @@ def save_preferences():
     except Exception as e:
         logger.error(f"Error saving preferences: {e}")
         return False
+    
+@mcp.tool()
+async def get_preferences() -> str:
+    """Get your current sports digest preferences"""
+    prefs = load_preferences()
+    result = "**Your Current Preferences:**\n\n"
+    
+    enabled_sports = [sport for sport, enabled in prefs['sports'].items() if enabled]
+    disabled_sports = [sport for sport, enabled in prefs['sports'].items() if not enabled]
+    
+    result += "**Enabled Sports:**\n"
+    if enabled_sports:
+        for sport in enabled_sports:
+            result += f"  ✓ {sport}\n"
+    else:
+        result += "  None\n"
+        
+    result += "\n**Disabled Sports:**\n"
+    if disabled_sports:
+        for sport in disabled_sports:
+            result += f"  ✗ {sport}\n"
+    else:
+        result += "  None\n"
+    
+    # Favorite teams
+    result += f"\n**Favorite Teams:**\n"
+    if prefs['favorite_teams']:
+        for team in prefs['favorite_teams']:
+            result += f"  • {team}\n"
+    else:
+        result += "  None set\n"
+    
+    # Other settings
+    result += f"\n**Email:** {prefs['email'] or 'Not set'}\n"
+    result += f"**Digest Time:** {prefs['digest_time']}\n"
+    result += f"**Include News:** {'Yes' if prefs['include_news'] else 'No'}\n"
+    result += f"**News Articles per Sport:** {prefs['news_limit']}\n"
+    
+@mcp.tool()
+async def toggle_sport(sport: str, enabled: bool) -> str:
+    """
+    Enable or disable a sport in your daily digest
+    
+    Args:
+        sport: The sport to toggle (NBA, WNBA, NFL, MLB, NHL, CFB)
+        enabled: True to enable, False to disable
+    """
+    if sport not in SPORT_ENDPOINTS:
+        return f"Sport '{sport}' not recognized. Choose from: {', '.join(SPORT_ENDPOINTS.keys())}"
+    
+    prefs = load_preferences()
+    prefs['sports'][sport] = enabled
+    
+    if save_preferences(prefs):
+        status = "enabled" if enabled else "disabled"
+        return f"✓ {sport} has been {status} in your daily digest"
+    else:
+        return "Error saving preferences"
+    
+@mcp.tool()
+async def set_favorite_teams(teams: list) -> str:
+    """
+    Set your favorite teams to get personalized coverage
+    
+    Args:
+        teams: List of team names (e.g., ["Los Angeles Lakers", "New York Liberty"])
+    """
+    prefs = load_preferences()
+    prefs['favorite_teams'] = teams
+    
+    if save_preferences(prefs):
+        if teams:
+            team_list = "\n  • ".join(teams)
+            return f"✓ Favorite teams updated:\n  • {team_list}"
+        else:
+            return "✓ Favorite teams cleared"
+    else:
+        return "Error saving preferences"
+    
+@mcp.tool()
+async def add_favorite_team(team: str) -> str:
+    """
+    Add a team to your favorites
+    
+    Args:
+        team: Team name (e.g., "Los Angeles Lakers")
+    """
+    prefs = load_preferences()
+    
+    if team in prefs['favorite_teams']:
+        return f"{team} is already in your favorites"
+    
+    prefs['favorite_teams'].append(team)
+    
+    if save_preferences(prefs):
+        return f"✓ Added {team} to your favorite teams"
+    else:
+        return "Error saving preferences"
+    
+@mcp.tool()
+async def remove_favorite_team(team: str) -> str:
+    """
+    Remove a team from your favorites
+    
+    Args:
+        team: Team name to remove
+    """
+    prefs = load_preferences()
+    
+    if team not in prefs['favorite_teams']:
+        return f"{team} is not in your favorites"
+    
+    prefs['favorite_teams'].remove(team)
+    
+    if save_preferences(prefs):
+        return f"✓ Removed {team} from your favorite teams"
+    else:
+        return "Error saving preferences"
+    
+@mcp.tool()
+async def set_email(email: str) -> str:
+    """
+    Set your email address for daily digests
+    
+    Args:
+        email: Your email address
+    """
+    prefs = load_preferences()
+    prefs['email'] = email
+    
+    if save_preferences(prefs):
+        return f"✓ Email set to {email}"
+    else:
+        return "Error saving preferences"
+    
+@mcp.tool()
+async def set_digest_settings(
+    include_news: bool = None,
+    news_limit: int = None,
+    digest_time: str = None
+) -> str:
+    """
+    Configure digest settings
+    
+    Args:
+        include_news: Whether to include news in digest
+        news_limit: Number of news articles per sport
+        digest_time: Preferred time for digest (HH:MM format, e.g., "08:00")
+    """
+    prefs = load_preferences()
+    
+    changes = []
+    
+    if include_news is not None:
+        prefs['include_news'] = include_news
+        changes.append(f"Include news: {include_news}")
+    
+    if news_limit is not None:
+        prefs['news_limit'] = news_limit
+        changes.append(f"News limit: {news_limit}")
+    
+    if digest_time is not None:
+        prefs['digest_time'] = digest_time
+        changes.append(f"Digest time: {digest_time}")
+    
+    if not changes:
+        return "No changes specified"
+    
+    if save_preferences(prefs):
+        return "✓ Settings updated:\n  • " + "\n  • ".join(changes)
+    else:
+        return "Error saving preferences"
+    
+@mcp.tool()
+async def reset_preferences() -> str:
+    """Reset all preferences to default values"""
+    if save_preferences(DEFAULT_PREFERENCES):
+        return "✓ Preferences reset to defaults"
+    else:
+        return "Error resetting preferences"
 
     
     
