@@ -31,7 +31,7 @@ SPORT_ENDPOINTS = {
     
     
 @mcp.tool()
-async def fetch_scores(sport: str = 'NBA', date: str = "yesterday") -> str:
+async def get_games(sport: str = 'NBA', date: str = "yesterday") -> str:
     """
     Get game scores for a specific sport and date.
     Args: 
@@ -85,7 +85,10 @@ async def fetch_scores(sport: str = 'NBA', date: str = "yesterday") -> str:
                 
                 if is_completed:
                     # Show final score
-                    result_text += f"• {away_team} {away_score}, {home_team} {home_score} - Final [ID: {game_id}]\n"
+                    if is_completed:
+                        result_text += f"• {away_team} {away_score}, {home_team} {home_score} - Final [ID: {game_id}, Sport: {sport}]\n"
+                    else:
+                        result_text += f"• {away_team} @ {home_team} - {time_str} [ID: {game_id}, Sport: {sport}]\n"
                 else:
                     # Show scheduled game
                     game_date = event.get('date', '')
@@ -164,6 +167,81 @@ async def get_sports_news(sport: str = "NBA", limit: int = 10) -> str:
     
     except Exception as e:
         return f"Error fetching {sport} news: {str(e)}"
+    
+@mcp.tool()
+async def get_game_details(game_id: str, sport: str = "NBA") -> str:
+    """
+    Get detailed information about a specific game including player stats and highlights.
+    Args:
+        game_id: The ESPN game ID (can be found in game data)
+        sport: the sport of the game (NBA, NFL, WNBA, NHL, MLB, CFB)
+    """
+    if sport not in SPORT_ENDPOINTS:
+        return f"Sport '{sport}' is not supported. Choose from: {', '.join(SPORT_ENDPOINTS.keys())}"
+    
+    endpoint = SPORT_ENDPOINTS[sport]
+    url = f"https://site.api.espn.com/apis/site/v2/sports/{endpoint}/summary?event={game_id}"
+    
+    
+    try:
+        response = requests.get(url)
+        response.raise_for_status()
+        data = response.json()
+        
+        header = data.get('header', {})
+        competitions = header.get('competitions', [{}])[0]
+        competitors = competitions.get('competitors', [])
+        
+        if len(competitors) < 2:
+            return "Unable to fetch game details."
+        
+        away_team = competitors[1].get('team', {}).get('displayName', 'Away')
+        away_score = competitors[1].get('score', '0')
+        home_team = competitors[0].get('team', {}).get('displayName', 'Home')
+        home_score = competitors[0].get('score', '0')
+        
+        result_text = f"**{away_team} {away_score} @ {home_team} {home_score}**\n\n"
+        
+        box_score = data.get('boxscore', {})
+        players = box_score.get('players', [])
+        
+        if players:
+            result_text += "**Top Performers:**\n\n"
+            
+            for team_data in players[:2]:  
+                team_name = team_data.get('team', {}).get('displayName', 'Team')
+                statistics = team_data.get('statistics', [])
+                
+                if statistics:
+                    result_text += f"*{team_name}:*\n"
+                    
+                    for stat_group in statistics[:3]:  
+                        athletes = stat_group.get('athletes', [])
+                        for athlete in athletes[:1]:  
+                            name = athlete.get('athlete', {}).get('displayName', 'Unknown')
+                            stats_list = athlete.get('stats', [])
+                            
+                            if len(stats_list) >= 3:
+                                pts = stats_list[0] if stats_list[0] != '0' else stats_list[0]
+                                reb = stats_list[1] if len(stats_list) > 1 else '0'
+                                ast = stats_list[2] if len(stats_list) > 2 else '0'
+                                
+                                result_text += f"  • {name}: {pts} PTS, {reb} REB, {ast} AST\n"
+                    
+                    result_text += "\n"
+                    
+        notes = data.get('notes', [])
+        if notes:
+            result_text += "**Game Notes:**\n"
+            for note in notes[:3]:
+                headline = note.get('headline', '')
+                if headline:
+                    result_text += f"• {headline}\n"
+        
+        return result_text
+    
+    except Exception as e:
+        return f"Error fetching game details: {str(e)}"
     
     
 # ============= SERVER ENTRY POINT =============

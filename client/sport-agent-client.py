@@ -16,6 +16,7 @@ fast = FastAgent("Sport Digest Agent", config_path="./fastagent.config.yaml")
     You have access to:
     - **Sports Schedule Data**: Fetch today's games across NBA, WNBA, NFL, MLB, and NHL
     - **Score Information**: Get results from yesterday's games or any specific date
+    - **Detailed Game Stats**: Get player stats from a specific game
     - **Sports News**: Get major sports news from specific sports or just sports overall
     - **User Preferences**: Manage which sports the user wants to follow
     
