@@ -2,6 +2,7 @@
 
 import os
 import requests
+import json
 from fastmcp import FastMCP
 from fastmcp.utilities.logging import get_logger
 from mcp.server import Server
@@ -20,6 +21,24 @@ mcp = FastMCP(
     instructions="You are a sports analyst",
 )
 
+PREFERENCES_FILE = 'user_preferences.json'
+
+DEFAULT_PREFERENCES = {
+    "sports": {
+        "NBA": True,
+        "WNBA": True,
+        "NFL": True,
+        "MLB": True,
+        "NHL": True,
+        "CFB": True
+    },
+    "favorite_teams": [],
+    "email": "",
+    "digest_time": "06:00",
+    "include_news": True,
+    "news_limit": 15
+}
+
 SPORT_ENDPOINTS = {
     "NBA": "basketball/nba",
     "WNBA": 'basketball/wnba',
@@ -28,6 +47,29 @@ SPORT_ENDPOINTS = {
     "NHL": 'hockey/nhl',
     "CFB": 'football/college-football'
 }
+
+def load_preferences():
+    """Load preferences from JSON file, create if doesn't exist"""
+    if not os.path.exists(PREFERENCES_FILE):
+        save_preferences(DEFAULT_PREFERENCES)
+        return DEFAULT_PREFERENCES.copy()
+    try:
+        with open(PREFERENCES_FILE, 'r') as f:
+            return json.load(f)
+    except Exception as e:
+        logger.error(f"Error loading preferences: {e}")
+        return DEFAULT_PREFERENCES.copy()
+    
+def save_preferences():
+    """Save preferences to JSON file"""
+    try:
+        with open(PREFERENCES_FILE, 'w') as f:
+            json.dump(prefs, f, indent=2)
+        return True
+    except Exception as e:
+        logger.error(f"Error saving preferences: {e}")
+        return False
+
     
     
 @mcp.tool()
