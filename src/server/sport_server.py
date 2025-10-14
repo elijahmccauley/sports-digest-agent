@@ -16,6 +16,8 @@ logger = get_logger(__name__)
 
 class Confirmation(BaseModel):
     confirmed: bool
+    
+ODDS_API_KEY = os.getenv("ODDS_API_KEY")
 
 # ============= MCP SERVER INITIALIZATION =============
 
