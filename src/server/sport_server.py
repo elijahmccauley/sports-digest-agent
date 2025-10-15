@@ -76,6 +76,7 @@ def save_preferences(prefs):
         logger.error(f"Error saving preferences: {e}")
         return False
     
+    
 @mcp.tool()
 async def get_preferences() -> str:
     """Get your current sports digest preferences"""
@@ -481,6 +482,39 @@ async def get_game_details(game_id: str, sport: str = "NBA") -> str:
     except Exception as e:
         return f"Error fetching game details: {str(e)}"
     
+    
+    
+    
+# Prompts ======================================
+
+@mcp.prompt()
+async def setup_preferences() -> str:
+    """Help user configure their sports preferences"""
+    return """Interactive preference setup
+
+WORKFLOW:
+1. get_preferences() → Show current settings
+2. Ask user which sports they follow
+3. toggle_sport() for each sport
+4. list_available_teams() → Show teams
+5. add_favorite_team() for their teams
+6. set_email() → Configure delivery
+7. get_preferences() → Confirm final settings"""
+
+@mcp.prompt()
+async def morning_digest_workflow() -> str:
+    """Create and send morning sports digest"""
+    return """Create morning sports digest (5min workflow)
+
+WORKFLOW:
+1. Check preferences resource to see enabled sports
+2. create_daily_digest(include_odds=True)
+3. validate_digest(digest_id)
+4. send_digest(digest_id)
+
+AGENT CONTROLS: Review before sending
+USER CONTROLS: Preferences set beforehand"""
+
     
 # ============= SERVER ENTRY POINT =============
 
