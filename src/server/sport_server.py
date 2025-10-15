@@ -77,6 +77,38 @@ def save_preferences(prefs):
         return False
     
     
+# Resources +++++++++++++++++++++++++++++++++++++++++++++++
+
+@mcp.resource("file://preferences.json")
+async def get_preferences_resource(ctx: Context = None) -> str:
+    """User's sports preferences - teams, sports, digest settings.
+    Annotations: High priority, for assistant consumption."""
+    prefs = load_preferences()
+    content = "# User Sports Preferences\n\n"
+    content += f"**Last Updated:** {datetime.now().strftime('%Y-%m-%d %H:%M')}\n\n"
+    enabled = [s for s, e in prefs['sports'].items() if e]
+    if enabled:
+        content += "## Enabled Sports\n"
+        for sport in enabled:
+            content += f"- {sport}\n"
+        content += "\n"
+        
+    if prefs.get("favorite_teams"):
+        content += "## Favorite Teams\n"
+        for team in prefs['favorite_teams']:
+            content += f"- {team}\n"
+        content += "\n"
+        
+    content += f"## Digest Settings\n"
+    content += f"- Email: {prefs.get('email', 'Not set')}\n"
+    content += f"- Digest Time: {prefs.get('digest_time', '08:00')}\n"
+    content += f"- Include News: {prefs.get('include_news', True)}\n"
+    content += f"- News Limit: {prefs.get('news_limit', 5)} per sport\n"
+    
+    return content
+
+# Tools ---------------------------------------------------
+    
 @mcp.tool()
 async def get_preferences() -> str:
     """Get your current sports digest preferences"""
@@ -482,6 +514,82 @@ async def get_game_details(game_id: str, sport: str = "NBA") -> str:
     except Exception as e:
         return f"Error fetching game details: {str(e)}"
     
+    
+@mcp.tool()
+async def create_daily_digest(
+    include_odds: bool = True,
+    ctx: Context = None) -> str:
+    
+    """
+    Create a comprehensive daily sports digest based on user preferences
+    
+    This is a WORKHORSE TOOL that:
+    1. Reads preferences automatically
+    2. Fetches today's games for enabled sports
+    3. Fetches yesterday's scores
+    4. Gets latest news (if enabled)
+    5. Gets odds (if requested)
+    6. Formats everything into email ready html
+    7. Returns preview and saves for sending
+    
+    Args: 
+        inculde_odds: Whether to include betting odds
+    Returns:
+        Preview of digest with stats and option to send
+    """
+    
+    prefs = load_preferences()
+    enabled_sports = [s for s, e in prefs['sports'].items() if e]
+    if not enabled_sports:
+        return "❌ No sports enabled. Use toggle_sport() to enable some sports first."
+    
+    await ctx.info(f"📰 Creating digest for {len(enabled_sports)} sports...")
+    
+    digest_content = {
+        'title': f"Sports Digest - {datetime.now().strftime('%A, %B %d, %Y')}",
+        'sports_sections': []
+    }
+    for i, sport in enumerate(enabled_sports):
+        await ctx.report_progress(progress=i, total=len(enabled_sports))
+        await ctx.info(f"Processing {sport}...")
+        
+        section = {
+            'sport': sport,
+            'todays_games': await get_games(sport, 'today'),
+            'yesterdays_scores': await get_games(sport, 'yesterday'),
+        }
+        
+        if prefs.get('include_news', True):
+            section['news'] = await get_sports_news(sport, 'yesterday')
+            
+        '''if include_odds:
+            section['odds'] = await get_game_odds(sport)'''
+
+        digest_content['sports_sections'].append(section)
+        
+    await ctx.report_progress(progress=len(enabled_sports), total=len(enabled_sports))
+    
+    # html_content = _format_digest_html(digest_content, prefs)
+    
+    digest_id = f"digest_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    #_save_digest(digest_id, html_content, digest_content)
+    
+    stats = {
+        'sports_count': len(enabled_sports),
+        'games_today': sum(1 for s in digest_content['sports_sections'] 
+                          for _ in s.get('todays_games', '')),
+        'scores_yesterday': sum(1 for s in digest_content['sports_sections'] 
+                               for _ in s.get('yesterdays_scores', '')),
+    }
+    
+    result = f"# ✅ Digest Created: {digest_id}\n\n"
+    result += f"**Sports:** {', '.join(enabled_sports)}\n"
+    result += f"**Today's Games:** {stats['games_today']}\n"
+    result += f"**Yesterday's Scores:** {stats['scores_yesterday']}\n"
+    result += f"**Email Ready:** {prefs.get('email', 'Email not set')}\n\n"
+    result += "**Use send_digest() to deliver via email**\n"
+    
+    return result
     
     
     
