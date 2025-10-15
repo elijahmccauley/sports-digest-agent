@@ -10,6 +10,7 @@ import mcp.types as types
 from datetime import datetime, timezone, timedelta
 #from fastmcp.prompts import UserMessage
 from pydantic import BaseModel
+from services/email_service2 
 
 # Initialize logger for server lifecycle events
 logger = get_logger(__name__)
@@ -54,6 +55,8 @@ SPORT_ENDPOINTS = {
     "CFB": 'football/college-football'
 }
 
+# HELPER FUNCTIONS +++++++++++++++++++++++++++++++++++++++++++++++
+
 def load_preferences():
     """Load preferences from JSON file, create if doesn't exist"""
     if not os.path.exists(PREFERENCES_FILE):
@@ -76,6 +79,8 @@ def save_preferences(prefs):
         logger.error(f"Error saving preferences: {e}")
         return False
     
+def _format_digest_html():
+    return 
     
 # Resources +++++++++++++++++++++++++++++++++++++++++++++++
 
