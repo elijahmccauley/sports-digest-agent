@@ -11,7 +11,7 @@ import mcp.types as types
 from datetime import datetime, timezone, timedelta
 #from fastmcp.prompts import UserMessage
 from pydantic import BaseModel
-from services.sport_email_service import EmailService
+from services.sport_email_service import SportEmailService
 from pathlib import Path
 from app_context import app_lifespan
 from config.settings import get_settings
@@ -80,7 +80,7 @@ email_settings = {
     "from_name": "Sports Digest Agent"
 }
 
-email_service = EmailService(email_settings)
+sport_email_service = SportEmailService(email_settings)
 
 # HELPER FUNCTIONS +++++++++++++++++++++++++++++++++++++++++++++++
 
@@ -870,7 +870,7 @@ async def create_daily_digest(
     Returns:
         Preview of digest with stats and option to send
     """
-    email_service = EmailService(email_settings)
+    sport_email_service = SportEmailService(email_settings)
     prefs = load_preferences()
     enabled_sports = [s for s, e in prefs['sports'].items() if e]
     if not enabled_sports:
@@ -915,8 +915,8 @@ async def create_daily_digest(
         json.dump(digest_content, f, indent=2)
 
     # Save HTML draft
-    email_service = ctx.request_context.lifespan_context.email_service
-    html_content = email_service._create_html_version(digest_content)
+    sport_email_service = ctx.request_context.lifespan_context.sport_email_service
+    html_content = sport_email_service._create_html_version(digest_content)
     html_file = drafts_dir / f"{digest_id}.html"
     with open(html_file, "w", encoding="utf-8") as f:
         f.write(html_content)
@@ -937,6 +937,76 @@ async def create_daily_digest(
     result += "**Use send_digest() to deliver via email**\n"
     
     return result
+
+
+@mcp.tool()
+async def send_digest(digest_id: str, ctx: Context = None) -> str:
+    """Send the finished digest via email."""
+    settings = ctx.request_context.lifespan_context.settings
+    draft_file = Path(settings.data_dir) / "newspapers" / f"{digest_id}.json"
+
+    if not draft_file.exists():
+        return f"❌ Sports Digest '{digest_id}' not found"
+
+    # Load draft
+    with open(draft_file, "r") as f:
+        draft = json.load(f)
+
+    # Get email service
+    sport_email_service = ctx.request_context.lifespan_context.sport_email_service
+
+    # Send email
+    result = sport_email_service.send_digest(
+        digest_data=draft, subject=f"📰 {draft['title']}"
+    )
+
+    if result.get("success"):
+        return f"✅ Newspaper '{draft['title']}' sent successfully!\n\n{result.get('message', '')}"
+    else:
+        return f"❌ Failed to send: {result.get('error', 'Unknown error')}"
+
+
+@mcp.tool()
+async def preview_newspaper(newspaper_id: str, ctx: Context = None) -> str:
+    """Preview newspaper before sending."""
+    settings = ctx.request_context.lifespan_context.settings
+    draft_file = Path(settings.data_dir) / "newspapers" / f"{newspaper_id}.json"
+
+    if not draft_file.exists():
+        return f"❌ Newspaper '{newspaper_id}' not found"
+
+    with open(draft_file, "r") as f:
+        draft = json.load(f)
+
+    result = f"# 📰 {draft['title']}\n"
+    if draft.get("subtitle"):
+        result += f"*{draft['subtitle']}*\n"
+    result += f"\n{datetime.now().strftime('%A, %B %d, %Y')}\n\n"
+
+    for section in draft["sections"]:
+        if not section["articles"]:
+            continue
+
+        result += f"## {section['title']}\n\n"
+        for i, article in enumerate(section["articles"], 1):
+            result += f"### {i}. {article['title']}\n"
+            if article.get("author"):
+                result += f"*By {article['author']}*\n\n"
+
+            # Preview first 200 chars
+            preview = article["content"][:200]
+            if len(article["content"]) > 200:
+                preview += "..."
+            result += f"{preview}\n\n"
+
+            if article.get("url"):
+                result += f"[Read more]({article['url']})\n\n"
+            result += "---\n\n"
+
+    return result
+
+
+print("✅ All newspaper creation tools registered!")
     
     
     

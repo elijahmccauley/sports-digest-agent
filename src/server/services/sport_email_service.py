@@ -17,7 +17,7 @@ from fastmcp.utilities.logging import get_logger
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 
-class EmailService:
+class SportEmailService:
     """Simple email service for sports digest delivery."""
 
     def __init__(self, email_settings):
@@ -59,14 +59,13 @@ class EmailService:
         )
 
     def send_digest(
-        self, digest_data: Dict, recipient: str, subject: str = None, version: int = 1
+        self, digest_data: Dict, subject: str = None, version: int = 1
     ) -> Dict:
         """
         Send sports digest to your personal email.
 
         Args:
             digest_data: Dict with sports digest content
-            recipient: The email the digest is sent to
             subject: Email subject (optional)
 
         Returns:

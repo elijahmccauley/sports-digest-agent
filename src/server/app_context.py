@@ -1,13 +1,13 @@
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 import os
-from services.sport_email_service import EmailService
+from services.sport_email_service import SportEmailService
 from fastmcp import FastMCP, Context
 from config.settings import get_settings
 
 @dataclass
 class AppContext:
-    email_service: EmailService
+    sport_email_service: SportEmailService
     settings: object
 
 @asynccontextmanager
@@ -18,7 +18,7 @@ async def app_lifespan(mcp: FastMCP):
     settings = get_settings()
     settings.data_dir.mkdir(parents=True, exist_ok=True)
 
-    email_service = EmailService(
+    sport_email_service = SportEmailService(
         {
             "server": "smtp.gmail.com",
             "port": 587,
@@ -32,7 +32,7 @@ async def app_lifespan(mcp: FastMCP):
 
     try:
         yield AppContext(
-            email_service=email_service,
+            sport_email_service=sport_email_service,
             settings=settings,
         )
     finally:
