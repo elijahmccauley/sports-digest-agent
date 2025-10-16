@@ -155,7 +155,7 @@ class EmailService:
 
     def _create_html_version(self, digest_data: Dict, version: int = 1) -> str:
         """Create HTML version using enhanced template."""
-        template = self.jinja_env.get_template(f"newspaper_email_v2{version}.html")
+        template = self.jinja_env.get_template(f"newspaper_email_v{version}.html")
 
         return template.render(
             digest_title=digest_data.get("title", "Sports Digest"),
@@ -164,3 +164,4 @@ class EmailService:
             user_email=digest_data.get("user_email", ""),
             preferences=digest_data.get("preferences", {}),
         )
+        

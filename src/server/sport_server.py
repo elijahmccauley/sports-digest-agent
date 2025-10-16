@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import os
+import dotenv
 import requests
 import json
 from fastmcp import FastMCP, Context
@@ -10,7 +11,10 @@ import mcp.types as types
 from datetime import datetime, timezone, timedelta
 #from fastmcp.prompts import UserMessage
 from pydantic import BaseModel
-from services/email_service2 
+from services.sport_email_service import EmailService
+from pathlib import Path
+from app_context import app_lifespan
+from config.settings import get_settings
 
 # Initialize logger for server lifecycle events
 logger = get_logger(__name__)
@@ -18,6 +22,7 @@ logger = get_logger(__name__)
 class Confirmation(BaseModel):
     confirmed: bool
     
+dotenv.load_dotenv()
 ODDS_API_KEY = os.getenv("ODDS_API_KEY")
 
 # ============= MCP SERVER INITIALIZATION =============
@@ -26,6 +31,7 @@ ODDS_API_KEY = os.getenv("ODDS_API_KEY")
 mcp = FastMCP(
     name="sport_mcp_server",
     instructions="You are a sports analyst",
+    lifespan=app_lifespan,
 )
 
 PREFERENCES_FILE = 'user_preferences.json'
@@ -55,6 +61,27 @@ SPORT_ENDPOINTS = {
     "CFB": 'football/college-football'
 }
 
+ODDS_SPORT_KEYS = {
+    "NBA": 'basketball_nba',
+    "MLB": 'baseball_mlb',
+    "NFL": "americanfootball_nfl",
+    "NHL": 'icehockey_nhl',
+    "CFB": 'americanfootball_ncaa',
+}
+
+email_settings = {
+    "server": os.getenv("SMTP_SERVER", "smtp.gmail.com"),
+    "port": int(os.getenv("SMTP_PORT", "587")),
+    "use_tls": True,
+    "use_ssl": False,
+    "username": os.getenv("SENDER_EMAIL"),
+    "password": os.getenv("SENDER_PASSWORD"),
+    "from_email": os.getenv("SENDER_EMAIL"),
+    "from_name": "Sports Digest Agent"
+}
+
+email_service = EmailService(email_settings)
+
 # HELPER FUNCTIONS +++++++++++++++++++++++++++++++++++++++++++++++
 
 def load_preferences():
@@ -79,8 +106,262 @@ def save_preferences(prefs):
         logger.error(f"Error saving preferences: {e}")
         return False
     
-def _format_digest_html():
-    return 
+async def _get_games(sport: str = 'NBA', date: str = "yesterday") -> str:
+    """
+    Get game scores for a specific sport and date.
+    Args: 
+        sport: The sport to fetch (NBA, WNBA, NFL, NHL, MLB, CFB)
+        date: Either 'yesterday', 'today', 'tomorrow', or a specific date in YYYYMMDD format (e.g. '20240930)
+    """
+    if sport not in SPORT_ENDPOINTS:
+        return f"Sport '{sport}' is not supported, please choose from {', '.join(SPORT_ENDPOINTS.keys())}"
+    
+    endpoint = SPORT_ENDPOINTS[sport]
+    
+    if date.lower() == "yesterday":
+        target_date = (datetime.now() - timedelta(days=1)).strftime('%Y%m%d')
+        date_label = "Yesterday"
+    elif date.lower() == "today":
+        target_date = datetime.now().strftime('%Y%m%d')
+        date_label = "Today"
+    elif date.lower() == "tomorrow":
+        target_date = (datetime.now() + timedelta(days=1)).strftime('%Y%m%d')
+        date_label = "Tomorrow"
+    else:
+        target_date = date
+        date_label = date
+        
+    url = f"https://site.api.espn.com/apis/site/v2/sports/{endpoint}/scoreboard?dates={target_date}"
+    
+    try:
+        response = requests.get(url)
+        response.raise_for_status()
+        data = response.json()
+        events = data.get('events', [])
+        
+        if not events:
+            return f"No {sport} games are scheduled for that day."
+        
+        result_text = f"**{sport} - {date_label} ({len(events)} games):**\n\n"
+        
+        for event in events:
+            game_id = event.get('id', 'unknown')
+            competitions = event.get('competitions', [{}])[0]
+            competitors = competitions.get('competitors', [])
+            status = event.get('status', {}).get('type', {})
+            status_detail = status.get('description', 'Unknown')
+            is_completed = status.get('completed', False)
+            
+            if len(competitors) >= 2:
+                away_team = competitors[1].get('team', {}).get('displayName', 'Away')
+                away_score = competitors[1].get('score', '0')
+                home_team = competitors[0].get('team', {}).get('displayName', 'Home')
+                home_score = competitors[0].get('score', '0')
+                
+                if is_completed:
+                    # Show final score
+                    if is_completed:
+                        result_text += f"• {away_team} {away_score}, {home_team} {home_score} - Final [ID: {game_id}, Sport: {sport}]\n"
+                    else:
+                        result_text += f"• {away_team} @ {home_team} - {time_str} [ID: {game_id}, Sport: {sport}]\n"
+                else:
+                    # Show scheduled game
+                    game_date = event.get('date', '')
+                    if game_date:
+                        game_time = datetime.fromisoformat(game_date.replace('Z', '+00:00'))
+                        time_str = game_time.strftime('%I:%M %p')
+                    else:
+                        time_str = "TBD"
+                    
+                    result_text += f"• {away_team} @ {home_team} - {time_str} [ID: {game_id}]\n"
+                    
+        result_text += "\n*Use game ID with get_game_details for more information*"
+        
+        return result_text
+    
+    except Exception as e:
+        return f"Error fetching scores: {str(e)}"
+    
+async def _get_sports_news(sport: str = "NBA", limit: int = 10) -> str:
+    """
+    Get the latest news headlines for a specific sport.
+    
+    Args:
+        sport: The sport to fetch news for (NBA, WNBA, NFL, MLB, NHL, CFB, or 'all' for general sports)
+        limit: Number of news articles to return (default 10)
+    """
+    if sport.lower() != "all" and sport not in SPORT_ENDPOINTS:
+        return f"Sport '{sport}' is not supported. Choose from: {', '.join(SPORT_ENDPOINTS.keys())} or 'all'"
+    if sport.lower() == "all":
+        url = "https://now.core.api.espn.com/v1/sports/news"
+    else:
+        endpoint = SPORT_ENDPOINTS[sport]
+        url = f"https://site.api.espn.com/apis/site/v2/sports/{endpoint}/news"
+        
+    try:
+        response = requests.get(url, params={'limit': limit})
+        response.raise_for_status()
+        data = response.json()
+        
+        articles = data.get('articles', [])
+        
+        if not articles:
+            return f"No news articles found for {sport}."
+        
+        news_text = f"**{sport} News - latest headlines:**\n\n"
+        
+        for i, article in enumerate(articles[:limit], 1):
+            headline = article.get('headline', 'No headline')
+            description = article.get('description', '')
+            published = article.get('published', '')
+            link = article.get('links', {}).get('web', {}).get('href', '')
+            
+            if published:
+                pub_date = datetime.fromisoformat(published.replace('Z', '+00:00'))
+                time_ago = datetime.now(timezone.utc) - pub_date
+                if time_ago.days > 0:
+                    time_str = f"{time_ago.days}d ago"
+                elif time_ago.seconds // 3600 > 0:
+                    time_str = f"{time_ago.seconds // 3600}h ago"
+                else:
+                    time_str = f"{time_ago.seconds // 60}m ago"  
+            else:
+                time_str = "Recently"
+                
+            news_text += f"{i}. **{headline}**\n"
+            if description:
+                news_text += f"   {description}\n"
+            news_text += f"   {time_str}"
+            if link:
+                news_text += f" • [Read more]({link})"
+            news_text += "\n\n"
+            
+        return news_text
+    
+    except Exception as e:
+        return f"Error fetching {sport} news: {str(e)}"
+    
+
+async def _get_game_details(game_id: str, sport: str = "NBA") -> str:
+    """
+    Get detailed information about a specific game including player stats and highlights.
+    Args:
+        game_id: The ESPN game ID (can be found in game data)
+        sport: the sport of the game (NBA, NFL, WNBA, NHL, MLB, CFB)
+    """
+    if sport not in SPORT_ENDPOINTS:
+        return f"Sport '{sport}' is not supported. Choose from: {', '.join(SPORT_ENDPOINTS.keys())}"
+    
+    endpoint = SPORT_ENDPOINTS[sport]
+    url = f"https://site.api.espn.com/apis/site/v2/sports/{endpoint}/summary?event={game_id}"
+    
+    
+    try:
+        response = requests.get(url)
+        response.raise_for_status()
+        data = response.json()
+        
+        header = data.get('header', {})
+        competitions = header.get('competitions', [{}])[0]
+        competitors = competitions.get('competitors', [])
+        
+        if len(competitors) < 2:
+            return "Unable to fetch game details."
+        
+        away_team = competitors[1].get('team', {}).get('displayName', 'Away')
+        away_score = competitors[1].get('score', '0')
+        home_team = competitors[0].get('team', {}).get('displayName', 'Home')
+        home_score = competitors[0].get('score', '0')
+        
+        result_text = f"**{away_team} {away_score} @ {home_team} {home_score}**\n\n"
+        
+        box_score = data.get('boxscore', {})
+        players = box_score.get('players', [])
+        
+        if players:
+            result_text += "**Top Performers:**\n\n"
+            
+            for team_data in players[:2]:  
+                team_name = team_data.get('team', {}).get('displayName', 'Team')
+                statistics = team_data.get('statistics', [])
+                
+                if statistics:
+                    result_text += f"*{team_name}:*\n"
+                    
+                    for stat_group in statistics[:3]:  
+                        athletes = stat_group.get('athletes', [])
+                        for athlete in athletes[:1]:  
+                            name = athlete.get('athlete', {}).get('displayName', 'Unknown')
+                            stats_list = athlete.get('stats', [])
+                            
+                            if len(stats_list) >= 3:
+                                pts = stats_list[0] if stats_list[0] != '0' else stats_list[0]
+                                reb = stats_list[1] if len(stats_list) > 1 else '0'
+                                ast = stats_list[2] if len(stats_list) > 2 else '0'
+                                
+                                result_text += f"  • {name}: {pts} PTS, {reb} REB, {ast} AST\n"
+                    
+                    result_text += "\n"
+                    
+        notes = data.get('notes', [])
+        if notes:
+            result_text += "**Game Notes:**\n"
+            for note in notes[:3]:
+                headline = note.get('headline', '')
+                if headline:
+                    result_text += f"• {headline}\n"
+        
+        return result_text
+    
+    except Exception as e:
+        return f"Error fetching game details: {str(e)}"
+    
+    
+
+async def _get_odds(sport: str) -> str:
+    """
+    Gets betting odds for upcoming games from a specific sport
+    Args:
+        sport: The sport which you want to get odds for (MLB, NBA, NFL, NHL, CFB)
+    Returns a string with the moneyline betting odds for each upcoming game
+    """
+    base_url = "https://api.the-odds-api.com/v4"
+    
+    sport_key = ODDS_SPORT_KEYS[sport]
+    odds_url = (
+        f"{base_url}/sports/{sport_key}/odds/?apiKey={ODDS_API_KEY}&regions=us&markets=h2h&oddsFormat=american"
+    )
+    try:
+        response = requests.get(odds_url)
+        response.raise_for_status()
+        odds_data = response.json()
+        if not odds_data:
+            return f"   -> No upcoming games with odds found for {sport}."
+        odds_text = f"**Upcoming {sport} Odds:**\n\n"
+        for game in odds_data:
+            home_team = game['home_team']
+            away_team = game['away_team']
+            commence_time = datetime.fromisoformat(game['commence_time'].replace('Z', '+00:00'))
+            
+            odds_text += f"**{away_team} @ {home_team}**\n"
+            odds_text += f"   Start Time: {commence_time.strftime('%Y-%m-%d %I:%M %p %Z')}\n"
+
+            bookmaker = next((b for b in game['bookmakers'] if b['key'] == 'fanduel'), game['bookmakers'][0])
+            
+            odds_text += f"   Odds via {bookmaker['title']}:\n"
+            market = bookmaker['markets'][0]
+            for outcome in market['outcomes']:
+                odds_text += f"     - {outcome['name']}: {outcome['price']}\n"
+            odds_text += "\n"
+            
+        return odds_text
+    except requests.exceptions.HTTPError as http_err:
+        if response.status_code == 422:
+            error_message = f"⚠️ No odds available for '{sport_key}'. It may be out of season or not included in your API plan."
+        else:
+            error_message = f"❌ HTTP error fetching odds for {sport_key}: {http_err}"
+        return None, error_message
+    
     
 # Resources +++++++++++++++++++++++++++++++++++++++++++++++
 
@@ -521,6 +802,53 @@ async def get_game_details(game_id: str, sport: str = "NBA") -> str:
     
     
 @mcp.tool()
+async def get_odds(sport: str) -> str:
+    """
+    Gets betting odds for upcoming games from a specific sport
+    Args:
+        sport: The sport which you want to get odds for (MLB, NBA, NFL, NHL, CFB)
+    Returns a string with the moneyline betting odds for each upcoming game
+    """
+    base_url = "https://api.the-odds-api.com/v4"
+    
+    sport_key = ODDS_SPORT_KEYS[sport]
+    odds_url = (
+        f"{base_url}/sports/{sport_key}/odds/?apiKey={ODDS_API_KEY}&regions=us&markets=h2h&oddsFormat=american"
+    )
+    try:
+        response = requests.get(odds_url)
+        response.raise_for_status()
+        odds_data = response.json()
+        if not odds_data:
+            return f"   -> No upcoming games with odds found for {sport}."
+        odds_text = f"**Upcoming {sport} Odds:**\n\n"
+        for game in odds_data:
+            home_team = game['home_team']
+            away_team = game['away_team']
+            commence_time = datetime.fromisoformat(game['commence_time'].replace('Z', '+00:00'))
+            
+            odds_text += f"**{away_team} @ {home_team}**\n"
+            odds_text += f"   Start Time: {commence_time.strftime('%Y-%m-%d %I:%M %p %Z')}\n"
+
+            bookmaker = next((b for b in game['bookmakers'] if b['key'] == 'fanduel'), game['bookmakers'][0])
+            
+            odds_text += f"   Odds via {bookmaker['title']}:\n"
+            market = bookmaker['markets'][0]
+            for outcome in market['outcomes']:
+                odds_text += f"     - {outcome['name']}: {outcome['price']}\n"
+            odds_text += "\n"
+            
+        return odds_text
+    except requests.exceptions.HTTPError as http_err:
+        if response.status_code == 422:
+            error_message = f"⚠️ No odds available for '{sport_key}'. It may be out of season or not included in your API plan."
+        else:
+            error_message = f"❌ HTTP error fetching odds for {sport_key}: {http_err}"
+        return None, error_message
+    
+    
+    
+@mcp.tool()
 async def create_daily_digest(
     include_odds: bool = True,
     ctx: Context = None) -> str:
@@ -542,7 +870,7 @@ async def create_daily_digest(
     Returns:
         Preview of digest with stats and option to send
     """
-    
+    email_service = EmailService(email_settings)
     prefs = load_preferences()
     enabled_sports = [s for s, e in prefs['sports'].items() if e]
     if not enabled_sports:
@@ -560,24 +888,38 @@ async def create_daily_digest(
         
         section = {
             'sport': sport,
-            'todays_games': await get_games(sport, 'today'),
-            'yesterdays_scores': await get_games(sport, 'yesterday'),
+            'todays_games': await _get_games(sport, 'today'),
+            'yesterdays_scores': await _get_games(sport, 'yesterday'),
         }
         
         if prefs.get('include_news', True):
-            section['news'] = await get_sports_news(sport, 'yesterday')
+            section['news'] = await _get_sports_news(sport, 'yesterday')
             
-        '''if include_odds:
-            section['odds'] = await get_game_odds(sport)'''
+        if include_odds:
+            section['odds'] = await _get_odds(sport)
 
         digest_content['sports_sections'].append(section)
         
     await ctx.report_progress(progress=len(enabled_sports), total=len(enabled_sports))
     
-    # html_content = _format_digest_html(digest_content, prefs)
-    
     digest_id = f"digest_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-    #_save_digest(digest_id, html_content, digest_content)
+    
+    
+    # Save draft
+    settings = ctx.request_context.lifespan_context.settings
+    drafts_dir = Path(settings.data_dir) / "newspapers"
+    drafts_dir.mkdir(exist_ok=True)
+
+    draft_file = drafts_dir / f"{digest_id}.json"
+    with open(draft_file, "w") as f:
+        json.dump(digest_content, f, indent=2)
+
+    # Save HTML draft
+    email_service = ctx.request_context.lifespan_context.email_service
+    html_content = email_service._create_html_version(digest_content)
+    html_file = drafts_dir / f"{digest_id}.html"
+    with open(html_file, "w", encoding="utf-8") as f:
+        f.write(html_content)
     
     stats = {
         'sports_count': len(enabled_sports),
