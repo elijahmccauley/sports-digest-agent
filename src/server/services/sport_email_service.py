@@ -154,7 +154,7 @@ class SportEmailService:
 
     def _create_html_version(self, digest_data: Dict, version: int = 1) -> str:
         """Create HTML version using enhanced template."""
-        template = self.jinja_env.get_template(f"newspaper_email_v{version}.html")
+        template = self.jinja_env.get_template(f"digest_email_v{version}.html")
 
         return template.render(
             digest_title=digest_data.get("title", "Sports Digest"),

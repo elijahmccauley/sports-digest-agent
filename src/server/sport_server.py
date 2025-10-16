@@ -882,7 +882,9 @@ async def create_daily_digest(
         'title': f"Sports Digest - {datetime.now().strftime('%A, %B %d, %Y')}",
         'sports_sections': []
     }
+    print(digest_content)
     for i, sport in enumerate(enabled_sports):
+        print(sport)
         await ctx.report_progress(progress=i, total=len(enabled_sports))
         await ctx.info(f"Processing {sport}...")
         

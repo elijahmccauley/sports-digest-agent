@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }}</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            line-height: 1.6;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px 30px;
+            text-align: center;
+            border-radius: 10px 10px 0 0;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 32px;
+        }
+        .header .date {
+            margin-top: 10px;
+            opacity: 0.9;
+        }
+        .sport-section {
+            background-color: white;
+            margin: 20px 0;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .sport-header {
+            color: #1a1a1a;
+            font-size: 24px;
+            border-bottom: 3px solid #667eea;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        .subsection {
+            margin: 25px 0;
+        }
+        .subsection h3 {
+            color: #667eea;
+            font-size: 18px;
+            margin-bottom: 15px;
+        }
+        .game {
+            padding: 15px;
+            margin: 10px 0;
+            background-color: #f9f9f9;
+            border-left: 4px solid #667eea;
+            border-radius: 4px;
+        }
+        .game.final {
+            background-color: #f0f8ff;
+            border-left-color: #28a745;
+        }
+        .score {
+            font-weight: bold;
+            color: #28a745;
+        }
+        .odds {
+            background-color: #fff3cd;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 4px;
+            border-left: 4px solid #ffc107;
+        }
+        .news-item {
+            padding: 15px 0;
+            border-bottom: 1px solid #eee;
+        }
+        .news-item:last-child {
+            border-bottom: none;
+        }
+        .footer {
+            text-align: center;
+            padding: 30px 20px;
+            color: #666;
+            font-size: 14px;
+            background-color: white;
+            border-radius: 0 0 10px 10px;
+            margin-top: 20px;
+        }
+        @media (max-width: 600px) {
+            body {
+                padding: 10px;
+            }
+            .header h1 {
+                font-size: 24px;
+            }
+            .sport-section {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>{{ title }}</h1>
+        <div class="date">{{ current_date }}</div>
+    </div>
+    
+    {% for section in sports_sections %}
+    <div class="sport-section">
+        <h2 class="sport-header">{{ section.sport }}</h2>
+        
+        {% if section.todays_games %}
+        <div class="subsection">
+            <h3>📅 Today's Schedule</h3>
+            {{ section.todays_games | safe }}
+        </div>
+        {% endif %}
+        
+        {% if section.yesterdays_scores %}
+        <div class="subsection">
+            <h3>🏆 Yesterday's Results</h3>
+            {{ section.yesterdays_scores | safe }}
+        </div>
+        {% endif %}
+        
+        {% if section.odds %}
+        <div class="subsection">
+            <h3>💰 Betting Lines</h3>
+            <div class="odds">{{ section.odds | safe }}</div>
+        </div>
+        {% endif %}
+        
+        {% if section.news %}
+        <div class="subsection">
+            <h3>📰 Latest News</h3>
+            {{ section.news | safe }}
+        </div>
+        {% endif %}
+    </div>
+    {% endfor %}
+    
+    <div class="footer">
+        <p>Delivered to {{ user_email }}</p>
+        <p>Daily Sports Digest | Powered by Your Sports Agent</p>
+    </div>
+</body>
+</html>
