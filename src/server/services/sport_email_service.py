@@ -95,11 +95,11 @@ class SportEmailService:
             # Send email - handle both SSL and TLS
             if self.use_ssl:
                 # Use SSL (port 465)
-                server = smtplib.SMTP_SSL(self.server, self.port, timeout=30)
+                server = smtplib.SMTP_SSL(self.server, self.port, timeout=60)
                 self.logger.debug(f"Connected via SSL to {self.server}:{self.port}")
             else:
                 # Use TLS (port 587)
-                server = smtplib.SMTP(self.server, self.port, timeout=30)
+                server = smtplib.SMTP(self.server, self.port, timeout=60)
                 if self.use_tls:
                     server.starttls()
                     self.logger.debug(f"Started TLS on {self.server}:{self.port}")
@@ -131,21 +131,52 @@ class SportEmailService:
             sport = section.get("sport", "Sport")
             content += f"{sport.upper()}\n{'-' * len(sport)}\n\n"
 
-            if section.get("todays_games"):
-                content += "📅 Today's Schedule:\n"
-                content += section["todays_games"] + "\n\n"
+            todays_games = section.get("todays_games", {})
+            if todays_games and not todays_games.get('error'):
+                games_list = todays_games.get('games', [])
+                if games_list:
+                    content += "📅 Today's Schedule:\n"
+                    for game in games_list:
+                        content += f"  • {game['away_team']} @ {game['home_team']} - {game.get('time', 'TBD')}\n"
+                    content += "\n"
 
-            if section.get("yesterdays_scores"):
-                content += "🏆 Yesterday's Results:\n"
-                content += section["yesterdays_scores"] + "\n\n"
+            yesterdays_scores = section.get("yesterdays_scores", {})
+            if yesterdays_scores and not yesterdays_scores.get('error'):
+                games_list = yesterdays_scores.get('games', [])
+                if games_list:
+                    content += "🏆 Yesterday's Results:\n"
+                    for game in games_list:
+                        content += f"  • {game['away_team']} {game['away_score']}, {game['home_team']} {game['home_score']} - Final\n"
+                    content += "\n"
 
-            if section.get("news"):
-                content += "📰 Latest News:\n"
-                content += section["news"] + "\n\n"
+            news = section.get("news", {})
+            if news and not news.get('error'):
+                articles = news.get('articles', [])
+                if articles:
+                    content += "📰 Latest News:\n"
+                    for i, article in enumerate(articles[:5], 1):
+                        content += f"  {i}. {article['headline']}\n"
+                        if article.get('description'):
+                            content += f"     {article['description'][:100]}...\n"
+                        content += f"     {article['time_ago']}\n"
+                    content += "\n"
 
-            if section.get("odds"):
+            odds = section.get("odds", {})
+            if isinstance(odds, str):
+                # Old string format - just add as-is
                 content += "💰 Betting Lines:\n"
-                content += section["odds"] + "\n\n"
+                content += odds + "\n\n"
+            elif odds and not odds.get('error'):
+                # New dict format
+                odds_games = odds.get('games', [])
+                if odds_games:
+                    content += "💰 Betting Lines:\n"
+                    for game in odds_games[:3]:
+                        content += f"  • {game['away_team']} @ {game['home_team']}\n"
+                        if game.get('odds'):
+                            for odd in game['odds']:
+                                content += f"    {odd['team']}: {odd['price']}\n"
+                    content += "\n"
 
             content += "\n"
 

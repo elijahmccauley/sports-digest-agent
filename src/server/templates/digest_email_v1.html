@@ -65,19 +65,108 @@
             font-weight: bold;
             color: #28a745;
         }
-        .odds {
-            background-color: #fff3cd;
+        .odds-game {
+            background: #fff9e6;
             padding: 15px;
             margin: 10px 0;
-            border-radius: 4px;
+            border-radius: 8px;
             border-left: 4px solid #ffc107;
         }
+
+        .odds-matchup {
+            font-size: 16px;
+            margin-bottom: 8px;
+            color: #333;
+        }
+
+        .odds-details {
+            display: flex;
+            justify-content: space-between;
+            font-size: 13px;
+            color: #666;
+            margin-bottom: 10px;
+        }
+
+        .odds-book {
+            font-style: italic;
+        }
+
+        .odds-lines {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .odds-line {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: white;
+            padding: 8px 12px;
+            border-radius: 4px;
+        }
+
+        .odds-team {
+            font-weight: 500;
+        }
+
+        .odds-price {
+            font-weight: bold;
+            font-size: 16px;
+            padding: 2px 8px;
+            border-radius: 4px;
+        }
+
+        .odds-price.positive {
+            color: #28a745;
+            background: #d4edda;
+        }
+
+        .odds-price.negative {
+            color: #dc3545;
+            background: #f8d7da;
+        }
+
+        /* News styling */
         .news-item {
             padding: 15px 0;
             border-bottom: 1px solid #eee;
         }
+
         .news-item:last-child {
             border-bottom: none;
+        }
+
+        .news-headline {
+            font-weight: 600;
+            font-size: 15px;
+            margin-bottom: 6px;
+        }
+
+        .news-headline a {
+            color: #667eea;
+            text-decoration: none;
+        }
+
+        .news-headline a:hover {
+            text-decoration: underline;
+        }
+
+        .news-description {
+            color: #666;
+            font-size: 14px;
+            line-height: 1.5;
+            margin-bottom: 6px;
+        }
+
+        .news-meta {
+            font-size: 12px;
+            color: #999;
+        }
+
+        .news-time {
+            font-style: italic;
         }
         .footer {
             text-align: center;
@@ -99,6 +188,149 @@
                 padding: 20px;
             }
         }
+        /* ... your existing styles ... */
+        
+        .game {
+            padding: 15px;
+            margin: 10px 0;
+            background-color: #f9f9f9;
+            border-left: 4px solid #667eea;
+            border-radius: 8px;
+            transition: transform 0.2s;
+        }
+        
+        .game:hover {
+            transform: translateX(5px);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .game.final {
+            background-color: #f0f8ff;
+            border-left-color: #28a745;
+        }
+        
+        .game-matchup {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 16px;
+            margin-bottom: 8px;
+        }
+        
+        .team {
+            flex: 1;
+            font-weight: 600;
+        }
+        
+        .team.away {
+            text-align: left;
+        }
+        
+        .team.home {
+            text-align: right;
+        }
+        
+        .at {
+            color: #999;
+            font-size: 14px;
+            padding: 0 10px;
+        }
+        
+        .score {
+            color: #28a745;
+            font-size: 20px;
+            margin-left: 10px;
+        }
+        
+        .game-info {
+            display: flex;
+            justify-content: space-between;
+            font-size: 14px;
+            color: #666;
+        }
+        
+        .time {
+            color: #667eea;
+        }
+        
+        .status-final {
+            background: #28a745;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        
+        .odds-container {
+            background: #fff3cd;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #ffc107;
+        }
+        
+        .news-container {
+            /* News styling */
+        }
+        .game-details {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #ddd;
+            font-size: 13px;
+        }
+
+        .top-performers {
+            color: #555;
+        }
+
+        .performer-team {
+            margin: 5px 0;
+        }
+
+        .performer {
+            display: block;
+            margin-left: 15px;
+            color: #667eea;
+        }
+        .game-with-odds {
+            background: linear-gradient(to right, #f9f9f9 0%, #fff9e6 100%);
+            padding: 15px;
+            margin: 10px 0;
+            border-left: 4px solid #667eea;
+            border-radius: 8px;
+        }
+
+        .inline-odds {
+            margin-top: 10px;
+            padding-top: 8px;
+            border-top: 1px dashed #ddd;
+            font-size: 13px;
+        }
+
+        .odds-label {
+            font-weight: 600;
+            color: #666;
+            margin-right: 10px;
+        }
+
+        .odds-value {
+            display: inline-block;
+            padding: 2px 8px;
+            margin: 0 5px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+
+        .odds-value.positive {
+            color: #28a745;
+            background: #d4edda;
+        }
+
+        .odds-value.negative {
+            color: #dc3545;
+            background: #f8d7da;
+        }
+
     </style>
 </head>
 <body>
@@ -111,35 +343,152 @@
     <div class="sport-section">
         <h2 class="sport-header">{{ section.sport }}</h2>
         
-        {% if section.todays_games %}
+        <!-- Today's Schedule -->
+        {% if section.todays_games and section.todays_games.games %}
         <div class="subsection">
             <h3>📅 Today's Schedule</h3>
-            {{ section.todays_games | safe }}
+            {% for game in section.todays_games.games %}
+            <div class="game">
+                <div class="game-matchup">
+                    <span class="team away">{{ game.away_team }}</span>
+                    <span class="at">@</span>
+                    <span class="team home">{{ game.home_team }}</span>
+                </div>
+                <div class="game-info">
+                    <span class="time">🕐 {{ game.time }}</span>
+                    <span class="status">{{ game.status }}</span>
+                </div>
+            </div>
+            {% endfor %}
         </div>
         {% endif %}
         
-        {% if section.yesterdays_scores %}
+        <!-- Yesterday's Results -->
+        {% if section.yesterdays_scores and section.yesterdays_scores.games %}
         <div class="subsection">
             <h3>🏆 Yesterday's Results</h3>
-            {{ section.yesterdays_scores | safe }}
+            {% for game in section.yesterdays_scores.games %}
+            <div class="game final">
+                <div class="game-matchup">
+                    <span class="team away">
+                        {{ game.away_team }}
+                        <strong class="score">{{ game.away_score }}</strong>
+                    </span>
+                    <span class="team home">
+                        {{ game.home_team }}
+                        <strong class="score">{{ game.home_score }}</strong>
+                    </span>
+                </div>
+                <div class="game-info">
+                    <span class="status-final">Final</span>
+                </div>
+                {% if game.details and game.details.top_performers %}
+                <div class="game-details">
+                    <div class="top-performers">
+                        {% for team_perf in game.details.top_performers %}
+                        <div class="performer-team">
+                            <strong>{{ team_perf.team }}:</strong>
+                            {% for player in team_perf.players[:2] %}
+                            <span class="performer">
+                                {{ player.name }}: {{ player.points }}pts, {{ player.rebounds }}reb, {{ player.assists }}ast
+                            </span>
+                            {% endfor %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
         </div>
         {% endif %}
         
-        {% if section.odds %}
+        <!-- Betting Lines -->
+        {% if section.odds and section.odds.games %}
         <div class="subsection">
             <h3>💰 Betting Lines</h3>
-            <div class="odds">{{ section.odds | safe }}</div>
+            {% for game in section.odds.games %}
+            <div class="odds-game">
+                <div class="odds-matchup">
+                    <strong>{{ game.away_team }} @ {{ game.home_team }}</strong>
+                </div>
+                <div class="odds-details">
+                    <span class="odds-time">{{ game.commence_date }} at {{ game.commence_time }}</span>
+                    <span class="odds-book">via {{ game.bookmaker }}</span>
+                </div>
+                {% if game.odds %}
+                <div class="odds-lines">
+                    {% for odd in game.odds %}
+                    <div class="odds-line">
+                        <span class="odds-team">{{ odd.team }}</span>
+                        <span class="odds-price {% if odd.price > 0 %}positive{% else %}negative{% endif %}">
+                            {{ '+' if odd.price > 0 else '' }}{{ odd.price }}
+                        </span>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
         </div>
         {% endif %}
         
-        {% if section.news %}
+        <!-- News -->
+        {% if section.news and section.news.articles %}
         <div class="subsection">
             <h3>📰 Latest News</h3>
-            {{ section.news | safe }}
+            {% for article in section.news.articles[:5] %}
+            <div class="news-item">
+                <div class="news-headline">
+                    {% if article.link %}
+                    <a href="{{ article.link }}" target="_blank">{{ article.headline }}</a>
+                    {% else %}
+                    {{ article.headline }}
+                    {% endif %}
+                </div>
+                {% if article.description %}
+                <div class="news-description">{{ article.description }}</div>
+                {% endif %}
+                <div class="news-meta">
+                    <span class="news-time">{{ article.time_ago }}</span>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% if section.todays_games_with_odds %}
+        <div class="subsection">
+            <h3>📅 Today's Schedule & Odds</h3>
+            {% for game in section.todays_games_with_odds %}
+            <div class="game-with-odds">
+                <div class="game-matchup">
+                    <span class="team away">{{ game.away_team }}</span>
+                    <span class="at">@</span>
+                    <span class="team home">{{ game.home_team }}</span>
+                </div>
+                <div class="game-info">
+                    <span class="time">🕐 {{ game.time }}</span>
+                    <span class="status">{{ game.status }}</span>
+                </div>
+                
+                <!-- Odds integrated -->
+                {% if game.odds %}
+                <div class="inline-odds">
+                    <span class="odds-label">Odds ({{ game.bookmaker }}):</span>
+                    {% for odd in game.odds %}
+                    <span class="odds-value {% if odd.price > 0 %}positive{% else %}negative{% endif %}">
+                        {{ odd.team[:15] }}: {{ '+' if odd.price > 0 else '' }}{{ odd.price }}
+                    </span>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
         </div>
         {% endif %}
     </div>
     {% endfor %}
+    </div>
     
     <div class="footer">
         <p>Delivered to {{ user_email }}</p>
