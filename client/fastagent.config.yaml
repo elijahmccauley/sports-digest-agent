@@ -1,7 +1,7 @@
 openai:
   base_url: "https://openrouter.ai/api/v1"
 
-default_model: "openrouter.anthropic/claude-4.5-sonnet"
+default_model: "openrouter.anthropic/claude-3.5-haiku"
 
 # Logging and Console Configuration:
 logger:

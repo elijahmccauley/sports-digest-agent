@@ -1441,47 +1441,6 @@ async def get_perplexity_team_news_tool(ctx: Context = None, team_names: list[st
     
     return result_text
 
-@mcp.tool()
-async def test_perplexity_connection() -> str:
-    """Test basic Perplexity API connection with simple query"""
-    if not PERPLEXITY_API_KEY:
-        return "❌ Perplexity API key not configured"
-    
-    headers = {
-        "Authorization": f"Bearer {PERPLEXITY_API_KEY}",
-        "Content-Type": "application/json"
-    }
-    
-    payload = {
-        "model": "llama-3.1-sonar-large-128k-online",
-        "messages": [{"role": "user", "content": "What is today's date?"}],
-        "max_tokens": 100
-    }
-    
-    try:
-        response = requests.post(
-            "https://api.perplexity.ai/chat/completions",
-            headers=headers,
-            json=payload,
-            timeout=10
-        )
-        
-        if response.status_code == 200:
-            data = response.json()
-            content = data.get("choices", [{}])[0].get("message", {}).get("content", "No content")
-            return f"✅ Connection successful!\nResponse: {content}"
-        else:
-            error_detail = ""
-            try:
-                error_data = response.json()
-                error_detail = f": {error_data}"
-            except:
-                error_detail = f": {response.text[:500]}"
-            
-            return f"❌ Status: {response.status_code}{error_detail}"
-        
-    except Exception as e:
-        return f"❌ Error: {str(e)}"
 
 # Prompts ======================================
 
