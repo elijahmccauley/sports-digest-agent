@@ -25,6 +25,7 @@ class Confirmation(BaseModel):
     
 dotenv.load_dotenv()
 ODDS_API_KEY = os.getenv("ODDS_API_KEY")
+PERPLEXITY_API_KEY = os.getenv("PERPLEXITY_API_KEY")
 
 # ============= MCP SERVER INITIALIZATION =============
 
@@ -1306,6 +1307,84 @@ async def get_team_news_data(team_names: list[str], max_articles: int = 3) -> di
         news_results[team] = articles
 
     return news_results
+
+async def get_perplexity_team_news(team_names: list[str]) -> dict:
+    """
+    Use Perplexity AI to get comprehensive news summaries about favorite teams.
+    """
+    if not PERPLEXITY_API_KEY:
+        return {"error": "Perplexity API key not configured"}
+    
+    news_results = {}
+    
+    for team in team_names:
+        try:
+            # Create a focused query for the team
+            query = f"What are the latest news, updates, trades, injuries, and developments for the {team} in the past week? Include any recent games, player performances, and upcoming schedule highlights."
+            
+            headers = {
+                "Authorization": f"Bearer {PERPLEXITY_API_KEY}",
+                "Content-Type": "application/json"
+            }
+            
+            payload = {
+                "model": "sonar",
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": "You are a sports news analyst. Provide concise, factual summaries of recent team news with specific details like dates, player names, and game results. Format your response as a structured summary."
+                    },
+                    {
+                        "role": "user", 
+                        "content": query
+                    }
+                ],
+                "max_tokens": 800,
+                "temperature": 0.2
+            }
+            
+            response = requests.post(
+                "https://api.perplexity.ai/chat/completions",
+                headers=headers,
+                json=payload,
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+                # Note: Citations may not be available in all models
+                citations = data.get("citations", [])
+                
+                news_results[team] = {
+                    "summary": content,
+                    "citations": citations,
+                    "timestamp": datetime.now().isoformat()
+                }
+            else:
+                # Add detailed error logging
+                error_detail = ""
+                try:
+                    error_data = response.json()
+                    error_detail = f": {error_data}"
+                except:
+                    error_detail = f": {response.text[:500]}"
+                
+                news_results[team] = {
+                    "error": f"API request failed with status {response.status_code}{error_detail}",
+                    "summary": f"Unable to fetch news for {team}",
+                    "citations": []
+                }
+                
+        except Exception as e:
+            news_results[team] = {
+                "error": str(e),
+                "summary": f"Error fetching news for {team}: {str(e)}",
+                "citations": []
+            }
+    
+    return news_results
+
 @mcp.tool()
 async def get_team_news(ctx: Context, team_names: list[str], max_articles: int = 3) -> dict:
     """
@@ -1315,6 +1394,95 @@ async def get_team_news(ctx: Context, team_names: list[str], max_articles: int =
     news_results = await get_team_news_data(team_names, max_articles)
     return news_results
     
+@mcp.tool()
+async def get_perplexity_team_news_tool(ctx: Context = None, team_names: list[str] = None) -> str:
+    """
+    Get comprehensive AI-powered news summaries about your favorite teams using Perplexity.
+    
+    Args:
+        team_names: List of team names to get news for. If not provided, uses your favorite teams from preferences.
+    """
+    if not PERPLEXITY_API_KEY:
+        return "❌ Perplexity API key not configured. Please set PERPLEXITY_API_KEY in your environment variables."
+    
+    # Use favorite teams from preferences if none specified
+    if not team_names:
+        prefs = load_preferences()
+        team_names = prefs.get('favorite_teams', [])
+        
+        if not team_names:
+            return "❌ No favorite teams set. Use add_favorite_team() to add teams or provide team_names parameter."
+    
+    await ctx.info(f"🤖 Getting AI-powered news summaries for {len(team_names)} teams...")
+    
+    news_results = await get_perplexity_team_news(team_names)
+    
+    # Format the results for display
+    result_text = f"**🤖 AI Team News Summary ({len(team_names)} teams)**\n\n"
+    
+    for team, data in news_results.items():
+        result_text += f"## {team}\n\n"
+        
+        if "error" in data:
+            result_text += f"❌ Error: {data['error']}\n\n"
+            continue
+            
+        # Add the AI summary
+        result_text += f"**Latest Updates:**\n{data['summary']}\n\n"
+        
+        # Add citations if available
+        if data.get('citations'):
+            result_text += f"**Sources:**\n"
+            for i, citation in enumerate(data['citations'][:5], 1):  # Show max 5 citations
+                result_text += f"{i}. {citation}\n"
+            result_text += "\n"
+        
+        result_text += "---\n\n"
+    
+    return result_text
+
+@mcp.tool()
+async def test_perplexity_connection() -> str:
+    """Test basic Perplexity API connection with simple query"""
+    if not PERPLEXITY_API_KEY:
+        return "❌ Perplexity API key not configured"
+    
+    headers = {
+        "Authorization": f"Bearer {PERPLEXITY_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    
+    payload = {
+        "model": "llama-3.1-sonar-large-128k-online",
+        "messages": [{"role": "user", "content": "What is today's date?"}],
+        "max_tokens": 100
+    }
+    
+    try:
+        response = requests.post(
+            "https://api.perplexity.ai/chat/completions",
+            headers=headers,
+            json=payload,
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            content = data.get("choices", [{}])[0].get("message", {}).get("content", "No content")
+            return f"✅ Connection successful!\nResponse: {content}"
+        else:
+            error_detail = ""
+            try:
+                error_data = response.json()
+                error_detail = f": {error_data}"
+            except:
+                error_detail = f": {response.text[:500]}"
+            
+            return f"❌ Status: {response.status_code}{error_detail}"
+        
+    except Exception as e:
+        return f"❌ Error: {str(e)}"
+
 # Prompts ======================================
 
 @mcp.prompt()
