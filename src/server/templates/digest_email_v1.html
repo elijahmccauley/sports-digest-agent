@@ -338,17 +338,38 @@
         <h1>{{ title }}</h1>
         <div class="date">{{ current_date }}</div>
     </div>
-    
+    {% if team_news %}
+    <div class="team-news-section" style="background:#f8fafc;padding:1rem;border-radius:12px;">
+    <h2 style="margin-bottom:0.5rem;">🏆 Latest News About Your Favorite Teams</h2>
+    {% for team, articles in team_news.items() %}
+    <div class="team-news-block">
+        <h3>{{ team }}</h3>
+        <ul>
+        {% for article in articles %}
+        <li>
+            <a href="{{ article.url }}">{{ article.title }}</a><br>
+            <span class="summary">{{ article.summary }}</span>
+        </li>
+        {% endfor %}
+        </ul>
+    </div>
+    {% endfor %}
+    </div>
+    {% endif %}
     {% for section in sports_sections %}
     <div class="sport-section">
         <h2 class="sport-header">{{ section.sport }}</h2>
-        
+        <h3>📅 Today's Schedule</h3>
         <!-- Today's Schedule -->
-        {% if section.todays_games and section.todays_games.games %}
+        {% if section.todays_games_with_odds or (section.todays_games and section.todays_games.games) %}
         <div class="subsection">
-            <h3>📅 Today's Schedule</h3>
-            {% for game in section.todays_games.games %}
-            <div class="game">
+            
+            
+            <!-- Use combined data if available, otherwise use regular games -->
+            {% set games_to_display = section.todays_games_with_odds or section.todays_games.games %}
+            
+            {% for game in games_to_display %}
+            <div class="game-with-odds">
                 <div class="game-matchup">
                     <span class="team away">{{ game.away_team }}</span>
                     <span class="at">@</span>
@@ -358,15 +379,30 @@
                     <span class="time">🕐 {{ game.time }}</span>
                     <span class="status">{{ game.status }}</span>
                 </div>
+                
+                <!-- Odds section - only shows if odds exist -->
+                {% if game.odds %}
+                <div class="inline-odds">
+                    <span class="odds-label">Odds ({{ game.bookmaker }}):</span>
+                    {% for odd in game.odds %}
+                    <span class="odds-value {% if odd.price > 0 %}positive{% else %}negative{% endif %}">
+                        {{ odd.team }}: {{ '+' if odd.price > 0 else '' }}{{ odd.price }}
+                    </span>
+                    {% endfor %}
+                </div>
+                {% endif %}
             </div>
             {% endfor %}
         </div>
+        {% else %}
+        <h3> No {{ section.sport }} games today</h3>
         {% endif %}
         
         <!-- Yesterday's Results -->
-        {% if section.yesterdays_scores and section.yesterdays_scores.games %}
+        
         <div class="subsection">
             <h3>🏆 Yesterday's Results</h3>
+            {% if section.yesterdays_scores and section.yesterdays_scores.games %}
             {% for game in section.yesterdays_scores.games %}
             <div class="game final">
                 <div class="game-matchup">
@@ -388,9 +424,9 @@
                         {% for team_perf in game.details.top_performers %}
                         <div class="performer-team">
                             <strong>{{ team_perf.team }}:</strong>
-                            {% for player in team_perf.players[:2] %}
+                            {% for player in team_perf.players[:3] %}
                             <span class="performer">
-                                {{ player.name }}: {{ player.points }}pts, {{ player.rebounds }}reb, {{ player.assists }}ast
+                                {{ player.name }}: {{ player.stats }}
                             </span>
                             {% endfor %}
                         </div>
@@ -400,44 +436,17 @@
                 {% endif %}
             </div>
             {% endfor %}
+            {% else %}
+            <h3>No Results</h3>
+            {% endif %}
         </div>
-        {% endif %}
         
-        <!-- Betting Lines -->
-        {% if section.odds and section.odds.games %}
-        <div class="subsection">
-            <h3>💰 Betting Lines</h3>
-            {% for game in section.odds.games %}
-            <div class="odds-game">
-                <div class="odds-matchup">
-                    <strong>{{ game.away_team }} @ {{ game.home_team }}</strong>
-                </div>
-                <div class="odds-details">
-                    <span class="odds-time">{{ game.commence_date }} at {{ game.commence_time }}</span>
-                    <span class="odds-book">via {{ game.bookmaker }}</span>
-                </div>
-                {% if game.odds %}
-                <div class="odds-lines">
-                    {% for odd in game.odds %}
-                    <div class="odds-line">
-                        <span class="odds-team">{{ odd.team }}</span>
-                        <span class="odds-price {% if odd.price > 0 %}positive{% else %}negative{% endif %}">
-                            {{ '+' if odd.price > 0 else '' }}{{ odd.price }}
-                        </span>
-                    </div>
-                    {% endfor %}
-                </div>
-                {% endif %}
-            </div>
-            {% endfor %}
-        </div>
-        {% endif %}
         
         <!-- News -->
         {% if section.news and section.news.articles %}
         <div class="subsection">
             <h3>📰 Latest News</h3>
-            {% for article in section.news.articles[:5] %}
+            {% for article in section.news.articles[:10] %}
             <div class="news-item">
                 <div class="news-headline">
                     {% if article.link %}
@@ -456,43 +465,13 @@
             {% endfor %}
         </div>
         {% endif %}
-        {% if section.todays_games_with_odds %}
-        <div class="subsection">
-            <h3>📅 Today's Schedule & Odds</h3>
-            {% for game in section.todays_games_with_odds %}
-            <div class="game-with-odds">
-                <div class="game-matchup">
-                    <span class="team away">{{ game.away_team }}</span>
-                    <span class="at">@</span>
-                    <span class="team home">{{ game.home_team }}</span>
-                </div>
-                <div class="game-info">
-                    <span class="time">🕐 {{ game.time }}</span>
-                    <span class="status">{{ game.status }}</span>
-                </div>
-                
-                <!-- Odds integrated -->
-                {% if game.odds %}
-                <div class="inline-odds">
-                    <span class="odds-label">Odds ({{ game.bookmaker }}):</span>
-                    {% for odd in game.odds %}
-                    <span class="odds-value {% if odd.price > 0 %}positive{% else %}negative{% endif %}">
-                        {{ odd.team[:15] }}: {{ '+' if odd.price > 0 else '' }}{{ odd.price }}
-                    </span>
-                    {% endfor %}
-                </div>
-                {% endif %}
-            </div>
-            {% endfor %}
-        </div>
-        {% endif %}
     </div>
     {% endfor %}
     </div>
     
     <div class="footer">
         <p>Delivered to {{ user_email }}</p>
-        <p>Daily Sports Digest | Powered by Your Sports Agent</p>
+        <p>Daily Sports Digest | Powered by Elijah's Sports Agent</p>
     </div>
 </body>
 </html>

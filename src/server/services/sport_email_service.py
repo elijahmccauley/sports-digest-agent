@@ -190,6 +190,7 @@ class SportEmailService:
         return template.render(
             digest_title=digest_data.get("title", "Sports Digest"),
             current_date=datetime.now().strftime("%A, %B %d, %Y"),
+            team_news=digest_data.get("team_news", []),
             sports_sections=digest_data.get("sports_sections", []),
             user_email=digest_data.get("user_email", ""),
             preferences=digest_data.get("preferences", {}),

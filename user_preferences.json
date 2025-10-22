@@ -4,14 +4,15 @@
     "WNBA": true,
     "NFL": true,
     "MLB": true,
-    "NHL": true,
+    "NHL": false,
     "CFB": true
   },
   "favorite_teams": [
     "Atlanta Falcons",
     "Minnesota Timberwolves",
+    "Toronto Blue Jays",
     "Georgia Tech",
-    "New York Liberty"
+    "Atlanta Hawks"
   ],
   "email": "emmccauley6@gmail.com",
   "digest_time": "06:00",

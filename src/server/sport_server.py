@@ -15,6 +15,7 @@ from services.sport_email_service import SportEmailService
 from pathlib import Path
 from app_context import app_lifespan
 from config.settings import get_settings
+from zoneinfo import ZoneInfo
 
 # Initialize logger for server lifecycle events
 logger = get_logger(__name__)
@@ -177,8 +178,8 @@ async def _get_games(sport: str = 'NBA', date: str = "yesterday") -> str:
                     game_date = event.get('date', '')
                     if game_date:
                         game_time = datetime.fromisoformat(game_date.replace('Z', '+00:00'))
-                        game_data['time'] = game_time.strftime('%I:%M %p')
-                        # game_data['datetime'] = game_time
+                        game_time_est = game_time.astimezone(ZoneInfo('America/New_York'))
+                        game_data['time'] = game_time_est.strftime('%I:%M %p')
                     else:
                         game_data['time'] = 'TBD'
                 
@@ -276,7 +277,66 @@ async def _get_game_details(game_id: str, sport: str = "NBA") -> str:
     
     endpoint = SPORT_ENDPOINTS[sport]
     url = f"https://site.api.espn.com/apis/site/v2/sports/{endpoint}/summary?event={game_id}"
-    
+    def format_player_stats(sport, stats_list, stat_type=None):
+        """Format stats as dict based on sport"""
+        if not stats_list:
+            return {'stat_line': 'No stats available'}
+        
+        try:
+            if sport in ['NBA', 'WNBA']:
+                # Basketball: ['42', '5-10', '3-8', '1-2', '1', '6', '7', '5', '4', '0', '2', '3', '+8', '14']
+                # Index 0 = minutes, 1 = FG, 2 = 3PT, 3 = FT, 13 = points, 6 = rebounds, 7 = assists
+                points = stats_list[13] if len(stats_list) > 13 else stats_list[0]
+                fg = stats_list[1] if len(stats_list) > 1 else ''
+                rebounds = stats_list[6] if len(stats_list) > 6 else '0'
+                assists = stats_list[7] if len(stats_list) > 7 else '0'
+                
+                if fg:
+                    return {
+                        'stat_line': f"{points} PTS ({fg} FG), {rebounds} REB, {assists} AST"
+                    }
+                else:
+                    return {
+                        'stat_line': f"{points} PTS, {rebounds} REB, {assists} AST"
+                    }
+                    
+            elif sport in ['NFL', 'CFB']:
+                # Check if it's passing stats (x/y format in first stat)
+                if '/' in str(stats_list[0]):  # Passing stats (completions/attempts)
+                    return {
+                        'stat_line': f"{stats_list[0]} CMP, {stats_list[1]} YDS, {stats_list[3]} TD" if len(stats_list) > 3 else f"{stats_list[0]} CMP"
+                    }
+                else:
+                    # Rushing or receiving (no x/y format)
+                    if len(stats_list) == 5:
+                        return {
+                            'stat_line': f"{stats_list[0]} CAR, {stats_list[1]} YDS, {stats_list[3]} TD"
+                        }
+                    else:
+                        return {
+                            'stat_line': f"{stats_list[0]} REC, {stats_list[1]} YDS" if len(stats_list) > 1 else stats_list[0]
+                        }
+                        
+            elif sport == 'NHL':
+                return {
+                    'stat_line': f"{stats_list[0]} G, {stats_list[1]} A, {stats_list[2]} PTS" if len(stats_list) > 2 else f"{stats_list[0]} G"
+                }
+                
+            elif sport == 'MLB':
+                # Batting or pitching
+                if len(stats_list) >= 3:
+                    return {
+                        'stat_line': f"{stats_list[0]} AB, {stats_list[1]} H, {stats_list[2]} RBI"
+                    }
+                else:
+                    return {'stat_line': ', '.join(str(s) for s in stats_list[:3])}
+            else:
+                # Generic fallback
+                return {'stat_line': ', '.join(str(s) for s in stats_list[:3])}
+                
+        except Exception as e:
+            # If anything fails, show first 3 stats
+            return {'stat_line': ', '.join(str(s) for s in stats_list[:3])}
     
     try:
         response = requests.get(url)
@@ -301,29 +361,28 @@ async def _get_game_details(game_id: str, sport: str = "NBA") -> str:
         top_performers = []
         
         if players:
-            
-            for team_data in players[:2]:  
+            for team_data in players[:2]:  # Both teams
                 team_name = team_data.get('team', {}).get('displayName', 'Team')
                 statistics = team_data.get('statistics', [])
                 
                 team_performers = []
                 
                 if statistics:
-                    
-                    for stat_group in statistics[:3]:  
+                    for stat_group in statistics[:3]:  # Top 3 stat categories
                         athletes = stat_group.get('athletes', [])
-                        for athlete in athletes[:1]:  
+                        stat_type = stat_group.get('type', '').lower()
+                        
+                        for athlete in athletes[:3]:  # Top athlete in this category
                             name = athlete.get('athlete', {}).get('displayName', 'Unknown')
                             stats_list = athlete.get('stats', [])
                             
-                            if len(stats_list) >= 3:
+                            if stats_list:
+                                formatted = format_player_stats(sport, stats_list, stat_type)
                                 team_performers.append({
                                     'name': name,
-                                    'points': stats_list[0] if stats_list[0] else '0',
-                                    'rebounds': stats_list[1] if len(stats_list) > 1 else '0',
-                                    'assists': stats_list[2] if len(stats_list) > 2 else '0'
+                                    'stats': formatted['stat_line']
                                 })
-                    
+                
                 if team_performers:
                     top_performers.append({
                         'team': team_name,
@@ -526,16 +585,26 @@ async def toggle_sport(sport: str, enabled: bool, ctx: Context = None) -> str:
         enabled: True to enable, False to disable
     """
     if sport not in SPORT_ENDPOINTS:
-        return f"Sport '{sport}' not recognized. Choose from: {', '.join(SPORT_ENDPOINTS.keys())}"
+        return f"❌ Sport '{sport}' not recognized. Choose from: {', '.join(SPORT_ENDPOINTS.keys())}"
+    
+    action = "enable" if enabled else "disable"
+    
+    result = await ctx.elicit(
+        message=f"Do you want to **{action} {sport}** in your daily digest?",
+        response_type=Confirmation,
+    )
+    
+    if result.action != "accept" or not result.data.confirmed:
+        return f"❌ **Operation cancelled** - {sport} preferences unchanged"
     
     prefs = load_preferences()
     prefs['sports'][sport] = enabled
     
     if save_preferences(prefs):
         status = "enabled" if enabled else "disabled"
-        return f"✓ {sport} has been {status} in your daily digest"
+        return f"✅ **{sport} has been {status}** in your daily digest"
     else:
-        return "Error saving preferences"
+        return "❌ Error saving preferences"
     
 @mcp.tool()
 async def set_favorite_teams(teams: list) -> str:
@@ -566,16 +635,30 @@ async def add_favorite_team(team: str, ctx: Context = None) -> str:
         team: Team name (e.g., "Los Angeles Lakers")
     """
     prefs = load_preferences()
-    
     if team in prefs['favorite_teams']:
         return f"{team} is already in your favorites"
+    result = await ctx.elicit(
+        message=f"Are you sure you want to add **{team}** to your favorite teams?",
+        response_type=Confirmation,
+    )
     
+    if result.action == "decline":
+        return f"❌ **Operation declined** - {team} was not added"
+    elif result.action == "cancel":
+        return f"❌ **Operation cancelled** - {team} was not added"
+    elif result.action != "accept":
+        return "❌ **Invalid response** - No changes made"
+    
+    if not result.data.confirmed:
+        return f"❌ **Not confirmed** - {team} was not added"
+    
+    # Add the team
     prefs['favorite_teams'].append(team)
     
     if save_preferences(prefs):
-        return f"✓ Added {team} to your favorite teams"
+        return f"✅ **Added {team} to your favorite teams**"
     else:
-        return "Error saving preferences"
+        return "❌ Error saving preferences"
     
 @mcp.tool()
 async def remove_favorite_team(team: str, ctx: Context = None) -> str:
@@ -588,17 +671,26 @@ async def remove_favorite_team(team: str, ctx: Context = None) -> str:
     prefs = load_preferences()
     
     if team not in prefs['favorite_teams']:
-        return f"{team} is not in your favorites"
+        return f"❌ {team} is not in your favorites"
+    
+    result = await ctx.elicit(
+        message=f"Are you sure you want to remove **{team}** from your favorites?",
+        response_type=Confirmation,
+    )
+    
+    if result.action != "accept" or not result.data.confirmed:
+        return f"❌ **Operation cancelled** - {team} remains in your favorites"
     
     prefs['favorite_teams'].remove(team)
     
     if save_preferences(prefs):
-        return f"✓ Removed {team} from your favorite teams"
+        remaining = len(prefs['favorite_teams'])
+        return f"✅ **Removed {team} from favorites**\n\n**Remaining favorites:** {remaining}"
     else:
-        return "Error saving preferences"
+        return "❌ Error saving preferences"
     
 @mcp.tool()
-async def set_email(email: str) -> str:
+async def set_email(email: str, ctx: Context = None) -> str:
     """
     Set your email address for daily digests
     
@@ -606,12 +698,20 @@ async def set_email(email: str) -> str:
         email: Your email address
     """
     prefs = load_preferences()
-    prefs['email'] = email
     
+    result = await ctx.elicit(
+        message=f"Is {email} your correct email address?",
+        response_type=Confirmation,
+    )
+    
+    if result.action != "accept" or not result.data.confirmed:
+        return f"❌ **Operation cancelled** - {email} was not set"
+    prefs['email'] = email
+
     if save_preferences(prefs):
-        return f"✓ Email set to {email}"
+        return f"✅ **Set email to be {email}**"
     else:
-        return "Error saving preferences"
+        return "❌ Error saving preferences"
     
 @mcp.tool()
 async def set_digest_settings(
@@ -821,6 +921,56 @@ async def get_game_details(game_id: str, sport: str = "NBA") -> str:
     endpoint = SPORT_ENDPOINTS[sport]
     url = f"https://site.api.espn.com/apis/site/v2/sports/{endpoint}/summary?event={game_id}"
     
+    STAT_FORMATS = {
+        'NBA': lambda stats: f"{stats[0]} PTS, {stats[8]} REB, {stats[9]} AST" if len(stats) > 9 else f"{stats[0]} PTS",
+        'WNBA': lambda stats: f"{stats[0]} PTS, {stats[8]} REB, {stats[9]} AST" if len(stats) > 9 else f"{stats[0]} PTS",
+        'NFL': {
+            'passing': lambda stats: f"{stats[0]} CMP, {stats[1]} YDS, {stats[3]} TD" if len(stats) > 3 else stats[0],
+            'rushing': lambda stats: f"{stats[0]} CAR, {stats[1]} YDS, {stats[3]} TD" if len(stats) > 3 else stats[0],
+            'receiving': lambda stats: f"{stats[0]} REC, {stats[1]} YDS, {stats[3]} TD" if len(stats) > 3 else stats[0],
+        },
+        'CFB': {
+            'passing': lambda stats: f"{stats[0]} CMP, {stats[1]} YDS, {stats[3]} TD" if len(stats) > 3 else stats[0],
+            'rushing': lambda stats: f"{stats[0]} CAR, {stats[1]} YDS, {stats[3]} TD" if len(stats) > 3 else stats[0],
+            'receiving': lambda stats: f"{stats[0]} REC, {stats[1]} YDS, {stats[3]} TD" if len(stats) > 3 else stats[0],
+        },
+        'NHL': lambda stats: f"{stats[0]} G, {stats[1]} A, {stats[2]} PTS" if len(stats) > 2 else f"{stats[0]} G",
+        'MLB': {
+            'batting': lambda stats: f"{stats[0]} AB, {stats[1]} H, {stats[2]} RBI" if len(stats) > 2 else stats[0],
+            'pitching': lambda stats: f"{stats[0]} IP, {stats[1]} H, {stats[2]} ER" if len(stats) > 2 else stats[0],
+        }
+    }
+    def format_stats(sport, stats_list, stat_type=None):
+        """Format stats based on sport and stat type"""
+        if not stats_list:
+            return "No stats available"
+        
+        try:
+            if sport in ['NBA', 'WNBA', 'NHL']:
+                return STAT_FORMATS[sport](stats_list)
+            elif sport in ['NFL', 'CFB']:
+                if stat_type:
+                    return STAT_FORMATS[sport][stat_type](stats_list)
+                else:
+                    # Default to passing if we don't know
+                    if len(stats_list) >= 8:
+                        return STAT_FORMATS[sport]['passing'](stats_list)
+                    elif len(stats_list) >= 5: 
+                        return STAT_FORMATS[sport]['rushing'](stats_list)
+                    else:  # Likely receiving
+                        return STAT_FORMATS[sport]['receiving'](stats_list)
+            elif sport == 'MLB':
+                # Similar for baseball
+                if stat_type:
+                    return STAT_FORMATS[sport][stat_type](stats_list)
+                else:
+                    return STAT_FORMATS[sport]['batting'](stats_list)
+            else:
+                # Fallback: just show first 3 stats
+                return ', '.join(str(s) for s in stats_list[:3])
+        except Exception:
+            # If formatting fails, show raw stats
+            return ', '.join(str(s) for s in stats_list[:3])
     
     try:
         response = requests.get(url)
@@ -847,25 +997,29 @@ async def get_game_details(game_id: str, sport: str = "NBA") -> str:
         if players:
             result_text += "**Top Performers:**\n\n"
             
-            for team_data in players[:2]:  
+            for team_data in players[:2]: 
+                print(team_data) 
                 team_name = team_data.get('team', {}).get('displayName', 'Team')
                 statistics = team_data.get('statistics', [])
                 
                 if statistics:
                     result_text += f"*{team_name}:*\n"
                     
-                    for stat_group in statistics[:3]:  
+                    # Get stat labels if available
+                    labels = statistics[0].get('labels', []) if statistics else []
+                    
+                    for stat_group in statistics[:3]:
                         athletes = stat_group.get('athletes', [])
-                        for athlete in athletes[:1]:  
+                        # Get the type from the stat group name
+                        stat_type = stat_group.get('type', '').lower()
+                        
+                        for athlete in athletes[:1]:
                             name = athlete.get('athlete', {}).get('displayName', 'Unknown')
                             stats_list = athlete.get('stats', [])
                             
-                            if len(stats_list) >= 3:
-                                pts = stats_list[0] if stats_list[0] != '0' else stats_list[0]
-                                reb = stats_list[1] if len(stats_list) > 1 else '0'
-                                ast = stats_list[2] if len(stats_list) > 2 else '0'
-                                
-                                result_text += f"  • {name}: {pts} PTS, {reb} REB, {ast} AST\n"
+                            if stats_list:
+                                formatted_stats = format_stats(sport, stats_list, stat_type)
+                                result_text += f"  • {name}: {formatted_stats}\n"
                     
                     result_text += "\n"
                     
@@ -962,6 +1116,14 @@ async def create_daily_digest(
     """
     sport_email_service = SportEmailService(email_settings)
     prefs = load_preferences()
+    
+    favorite_teams = prefs.get('favorite_teams', [])
+
+    # Fetch personalized team news
+    if favorite_teams:
+        team_news = await get_team_news_data(favorite_teams)
+    else:
+        team_news = {}
     enabled_sports = [s for s, e in prefs['sports'].items() if e]
     if not enabled_sports:
         return "❌ No sports enabled. Use toggle_sport() to enable some sports first."
@@ -970,13 +1132,14 @@ async def create_daily_digest(
     
     digest_content = {
         'title': f"Sports Digest - {datetime.now().strftime('%A, %B %d, %Y')}",
+        'team_news': team_news,
         'sports_sections': [],
         'user_email': prefs.get('email', ''),
         'preferences': prefs
     }
-    print(digest_content)
+
     for i, sport in enumerate(enabled_sports):
-        print(sport)
+
         await ctx.report_progress(progress=i, total=len(enabled_sports))
         await ctx.info(f"Processing {sport}...")
         
@@ -988,7 +1151,7 @@ async def create_daily_digest(
         if section['yesterdays_scores'].get('games'):
             await ctx.info(f"Fetching details for {len(section['yesterdays_scores']['games'])} games...")
             
-            for game in section['yesterdays_scores']['games'][:3]:  # Limit to 3 games for speed
+            for game in section['yesterdays_scores']['games']:
                 game_id = game.get('id')
                 if game_id:
                     details = await _get_game_details(game_id, sport)
@@ -1000,19 +1163,18 @@ async def create_daily_digest(
         if include_odds:
             section['odds'] = await _get_odds(sport)
             
-            if section['odds'].get('games') and section['todays_games'].get('games'):
+            if section['todays_games'].get('games'):
                 section['todays_games_with_odds'] = await _match_odds_to_games(
                     section['todays_games']['games'],
-                    section['odds']['games']
-                )
-
+                    section['odds'].get('games', []))
+        else:
+            section['todays_games_with_odds'] = section['todays_games'].get('games', [])
         digest_content['sports_sections'].append(section)
         
         
     html_content = sport_email_service._create_html_version(digest_content, version=1)
     text_content = sport_email_service._create_text_version(digest_content)
     
-    # 
     digest_id = f"digest_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
     settings = ctx.request_context.lifespan_context.settings
     drafts_dir = Path(settings.data_dir) / "newspapers"
@@ -1032,43 +1194,6 @@ async def create_daily_digest(
     sport_email_service.send_digest(digest_data=digest_content, subject="sport email", version=1)
     
     return f"✅ Digest created: {digest_id}\nReady to send!"
-    '''await ctx.report_progress(progress=len(enabled_sports), total=len(enabled_sports))
-    
-    digest_id = f"digest_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-    
-    
-    # Save draft
-    settings = ctx.request_context.lifespan_context.settings
-    drafts_dir = Path(settings.data_dir) / "newspapers"
-    drafts_dir.mkdir(exist_ok=True)
-
-    draft_file = drafts_dir / f"{digest_id}.json"
-    with open(draft_file, "w") as f:
-        json.dump(digest_content, f, indent=2)
-
-    # Save HTML draft
-    sport_email_service = ctx.request_context.lifespan_context.sport_email_service
-    html_content = sport_email_service._create_html_version(digest_content)
-    html_file = drafts_dir / f"{digest_id}.html"
-    with open(html_file, "w", encoding="utf-8") as f:
-        f.write(html_content)
-    
-    stats = {
-        'sports_count': len(enabled_sports),
-        'games_today': sum(1 for s in digest_content['sports_sections'] 
-                          for _ in s.get('todays_games', '')),
-        'scores_yesterday': sum(1 for s in digest_content['sports_sections'] 
-                               for _ in s.get('yesterdays_scores', '')),
-    }
-    
-    result = f"# ✅ Digest Created: {digest_id}\n\n"
-    result += f"**Sports:** {', '.join(enabled_sports)}\n"
-    result += f"**Today's Games:** {stats['games_today']}\n"
-    result += f"**Yesterday's Scores:** {stats['scores_yesterday']}\n"
-    result += f"**Email Ready:** {prefs.get('email', 'Email not set')}\n\n"
-    result += "**Use send_digest() to deliver via email**\n"
-    
-    return result'''
 
 
 @mcp.tool()
@@ -1080,14 +1205,11 @@ async def send_digest(digest_id: str, ctx: Context = None) -> str:
     if not draft_file.exists():
         return f"❌ Sports Digest '{digest_id}' not found"
 
-    # Load draft
     with open(draft_file, "r") as f:
         draft = json.load(f)
 
-    # Get email service
     sport_email_service = ctx.request_context.lifespan_context.sport_email_service
 
-    # Send email
     result = sport_email_service.send_digest(
         digest_data=draft, subject=f"📰 {draft['title']}"
     )
@@ -1098,7 +1220,7 @@ async def send_digest(digest_id: str, ctx: Context = None) -> str:
         return f"❌ Failed to send: {result.get('error', 'Unknown error')}"
 
 
-@mcp.tool()
+'''@mcp.tool()
 async def preview_newspaper(newspaper_id: str, ctx: Context = None) -> str:
     """Preview newspaper before sending."""
     settings = ctx.request_context.lifespan_context.settings
@@ -1137,7 +1259,7 @@ async def preview_newspaper(newspaper_id: str, ctx: Context = None) -> str:
 
     return result
 
-print("✅ All newspaper creation tools registered!")
+print("✅ All newspaper creation tools registered!")'''
     
     
 @mcp.tool()
@@ -1157,6 +1279,41 @@ async def test_email_connection(ctx: Context = None) -> str:
     
     return f"Test result: {result}"
     
+    
+def fetch_team_news(team, api_key, max_articles=5):
+    query = f"{team} latest sports news"
+    url = f"https://api.search.brave.com/res/v1/news/search?q={query}"
+    headers = {"Accept": "application/json", "X-Subscription-Token": api_key}
+
+    response = requests.get(url, headers=headers)
+    data = response.json()
+
+    articles = [
+        {"title": item["title"], "url": item["url"]}
+        for item in data.get("results", [])[:max_articles]
+    ]
+    return articles
+
+async def get_team_news_data(team_names: list[str], max_articles: int = 3) -> dict:
+    """
+    Internal helper to fetch structured team news data without MCP context.
+    """
+    news_results = {}
+
+    for team in team_names:
+        query = f"{team} recent news site:espn.com OR site:mlb.com OR site:nba.com OR site:theathletic.com"
+        articles = fetch_team_news(team, os.getenv("BRAVE_API_KEY"))
+        news_results[team] = articles
+
+    return news_results
+@mcp.tool()
+async def get_team_news(ctx: Context, team_names: list[str], max_articles: int = 3) -> dict:
+    """
+    Tool to get news about a specific team or set of teams.
+    """
+    await ctx.info(f"Fetching news for {', '.join(team_names)}...")
+    news_results = await get_team_news_data(team_names, max_articles)
+    return news_results
     
 # Prompts ======================================
 
@@ -1182,7 +1339,6 @@ async def morning_digest_workflow() -> str:
 WORKFLOW:
 1. Check preferences resource to see enabled sports
 2. create_daily_digest(include_odds=True)
-3. validate_digest(digest_id)
 4. send_digest(digest_id)
 
 AGENT CONTROLS: Review before sending

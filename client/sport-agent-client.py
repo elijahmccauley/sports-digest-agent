@@ -35,7 +35,7 @@ fast = FastAgent("Sport Digest Agent", config_path="./fastagent.config.yaml")
         # Our custom newspaper creation server
         "sport_mcp_server",
         #"fetch",  # Content fetching and extraction
-        #"brave",  # Web search
+        "brave",  # Web search
         #"perplexity_mcp",  # AI-powered research
     ],
     request_params=RequestParams(
